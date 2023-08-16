@@ -5,6 +5,7 @@ from PIL import Image
 from skimage.metrics import structural_similarity as ssim
 from skimage.metrics import peak_signal_noise_ratio as psnr
 import torch
+from tqdm import tqdm
 
 from image_folder import make_dataset
 from fid_score import calculate_fid_given_paths
@@ -37,8 +38,11 @@ def calculate_score(img_gt, img_test):
 
 
 if __name__ == '__main__':
+    print("Make dataset ...")
     gt_paths, gt_size = make_dataset(args.gt_path)
     g_paths, g_size = make_dataset(args.g_path)
+
+    print("calculate_fid ...")
     fid_score = calculate_fid_given_paths([args.gt_path, args.g_path], batch_size=50, cuda=True, dims=2048)
 
     l1losses = []
@@ -48,14 +52,14 @@ if __name__ == '__main__':
 
     size = args.num_test if args.num_test > 0 else gt_size
 
-    for i in range(size):
+    for i in tqdm(range(size)):
         gt_img = Image.open(gt_paths[i]).convert('RGB')
         gt_numpy = np.array(gt_img).astype(np.float32) / 255.0
         
         g_img = Image.open(g_paths[i]).convert('RGB')
         g_numpy = np.array(g_img).astype(np.float32) / 255.0
         l1loss, ssim_score, psnr_score, lpips_score = calculate_score(gt_numpy, g_numpy)
-        print(l1loss, ssim_score, psnr_score, lpips_score)
+        # print(l1loss, ssim_score, psnr_score, lpips_score)
         l1losses.append(l1loss)
         ssims.append(ssim_score)
         psnrs.append(psnr_score)

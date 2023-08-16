@@ -106,7 +106,7 @@ class Decoder(nn.Module):
 class Model(nn.Module):
     def __init__(self, input_dim, num_hiddens, num_residual_layers, num_residual_hiddens, 
                  num_embeddings, embedding_dim, commitment_cost=0.25, distance='l2', 
-                 anchor='closest', first_batch=False, contras_loss=True):
+                 anchor='closest', first_batch=False, contras_loss=True, lora_codebook=False):
         super(Model, self).__init__()
         
         self._encoder = Encoder(input_dim, num_hiddens,
@@ -116,15 +116,25 @@ class Model(nn.Module):
                                       out_channels=embedding_dim,
                                       kernel_size=1, 
                                       stride=1)
-        
+
+
         self._vq_vae = VectorQuantiser(num_embeddings, embedding_dim, commitment_cost, distance=distance, 
                                        anchor=anchor, first_batch=first_batch, contras_loss=contras_loss)
         
-        self._decoder = Decoder(embedding_dim,
+        self.lora_codebook = lora_codebook
+        if self.lora_codebook:
+            decoder_in_channel = num_hiddens
+            self._pre_vq_conv = None
+            
+        else:
+            decoder_in_channel = embedding_dim
+            
+        self._decoder = Decoder(decoder_in_channel,
                                 num_hiddens, 
                                 num_residual_layers, 
                                 num_residual_hiddens,
                                 input_dim)
+        print("lora_codebook=", self.lora_codebook)
 
     def encode(self, x):
         z_e_x = self._encoder(x)
@@ -134,7 +144,8 @@ class Model(nn.Module):
 
     def forward(self, x):
         z = self._encoder(x)
-        z = self._pre_vq_conv(z)
+        if not self.lora_codebook:
+            z = self._pre_vq_conv(z)
         quantized, loss, (perplexity, encodings, _) = self._vq_vae(z)
         x_recon = self._decoder(quantized)
 

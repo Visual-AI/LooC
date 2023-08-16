@@ -8,6 +8,7 @@ import torch.nn.functional as F
 from torchvision import transforms, datasets
 from torchvision.utils import  make_grid
 from tensorboardX import SummaryWriter
+from tqdm import tqdm
 
 from modules import Model
 
@@ -30,6 +31,7 @@ def seed_worker(worker_id):
 
 def train(data_loader, model, optimizer, args, writer, data_variance=1):
     """trianing the model"""
+    # for images, _ in tqdm(data_loader):
     for images, _ in data_loader:
         images = images.to(args.device)
         optimizer.zero_grad()
@@ -82,7 +84,7 @@ def main(args):
 
     # load dataset
     data_variance=1
-    if args.dataset in ['mnist', 'fashion-mnist', 'cifar10', 'celeba']:
+    if args.dataset in ['mnist', 'fashion-mnist', 'cifar10', 'celeba', 'imagenet']:
         transform = transforms.Compose([
             transforms.ToTensor(),
             transforms.Normalize((0.5), (0.5))
@@ -126,13 +128,29 @@ def main(args):
                 split='train', download=True, transform=transform)
             test_dataset = datasets.CelebA(args.data_folder,
                 split='valid', download=True, transform=transform)
-            train_list = []
-            for i in range(len(train_dataset)):
-                train_list.append(train_dataset[i][0])
+            # print(f"len(train_dataset) = {len(train_dataset)}")
+            # train_list = []
+            # for i in range(len(train_dataset)):
+            #     print(i, train_dataset[i][0])
+            #     train_list.append(train_dataset[i][0])
             num_channels = 3
+        elif args.dataset == 'imagenet':  # imagenet
+            print("Loading imagenet")
+            transform = transforms.Compose([
+            transforms.Resize([256, 256]),  # TODO size = ?
+            transforms.ToTensor(),
+            transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225))
+            ])
+            train_dataset = datasets.ImageNet(args.data_folder,
+                split='train', download=False, transform=transform)
+            test_dataset = datasets.ImageNet(args.data_folder,
+                split='val', download=False, transform=transform)
+            num_channels = 3
+
         valid_dataset = test_dataset
 
     # Define the dataloaders
+    print("Define the dataloaders")
     g = torch.Generator()
     g.manual_seed(args.seed)
     train_loader = torch.utils.data.DataLoader(train_dataset,
@@ -148,15 +166,20 @@ def main(args):
         worker_init_fn=seed_worker, generator=g)
     
     # Define the model
+    print("Define the model")
     model = Model(num_channels, args.hidden_size, args.num_residual_layers, args.num_residual_hidden,
                   args.num_embedding, args.embedding_dim, args.commitment_cost, args.distance,
-                  args.anchor, args.first_batch, args.contras_loss).to(args.device)
+                  args.anchor, args.first_batch, args.contras_loss,
+                  lora_codebook=args.lora_codebook  # TODO config
+                  ).to(args.device)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
     # Update the model
+    print("Update the model")
     best_loss = -1.
-    for epoch in range(args.num_epochs):
+    for epoch in tqdm(range(args.num_epochs)):
         # training and testing the model
+        # print(f"Epoch: {epoch}")
         train(train_loader, model, optimizer, args, writer, data_variance)
         loss_rec, loss_vq = test(valid_loader, model, args, writer)
 
@@ -194,6 +217,7 @@ if __name__ == '__main__':
     parser.add_argument('--anchor', type=str, default='closest', help='anchor sampling methods (random, closest, probrandom)')
     parser.add_argument('--first_batch', action='store_true', help='offline version with only one time reinitialisation')
     parser.add_argument('--contras_loss', action='store_true', help='using contrastive loss')
+    parser.add_argument('--lora_codebook', action='store_true', help='using lora_codebook')
     # Optimization
     parser.add_argument('--seed', type=int, default=42, help="seed for everything")
     parser.add_argument('--num_epochs', type=int, default=500, help='number of epochs (default: 100)')
@@ -205,6 +229,7 @@ if __name__ == '__main__':
     parser.add_argument('--device', type=str, default='cpu', help='set the device (cpu or cuda, default: cpu)')
 
     args = parser.parse_args()
+    print("num_workers =", args.num_workers)
 
     if not os.path.exists(os.path.join(args.output_folder, 'logs')):
         os.makedirs(os.path.join(args.output_folder, 'logs'))

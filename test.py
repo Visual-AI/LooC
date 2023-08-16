@@ -10,6 +10,7 @@ from torchvision import transforms, datasets
 
 from modules import Model
 from util import tensor2im, save_image
+from tqdm import tqdm
 
 
 parser = argparse.ArgumentParser(description='CVQ-VAE')
@@ -25,6 +26,8 @@ parser.add_argument('--num_residual_layers', type=int, default=2, help='number o
 parser.add_argument('--embedding_dim', type=int, default=64, help='dimention of codebook (default: 64)')
 parser.add_argument('--num_embedding', type=int, default=512, help='number of codebook (default: 512)')
 parser.add_argument('--distance', type=str, default='cos', help='distance for codevectors and features')
+parser.add_argument('--lora_codebook', action='store_true', help='using lora_codebook')
+
 # Miscellaneous
 parser.add_argument('--output_folder', type=str, default='/scratch/shared/beegfs/cxzheng/normcode/final_vqvae/', help='name of the output folder (default: vqvae)')
 parser.add_argument('--model_name', type=str, default='fashionmnist_probrandom_contramin1/best.pt', help='name of the output folder (default: vqvae)')
@@ -64,12 +67,16 @@ elif args.dataset == 'celeba':
     test_dataset = datasets.CelebA(args.data_folder, split='valid', download=True, transform=transform)
     num_channels = 3
 
+else:
+    raise NotImplementedError
+
 # Define the dataloaders
 test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
 
 # Define the model
 model = Model(num_channels, args.hidden_size, args.num_residual_layers, args.num_residual_hidden,
-                  args.num_embedding, args.embedding_dim, distance=args.distance)
+                  args.num_embedding, args.embedding_dim, distance=args.distance,
+                  lora_codebook=args.lora_codebook)
 
 # load model
 ckpt = torch.load(os.path.join(os.path.join(os.path.join(args.output_folder, 'models'), args.model_name)))
@@ -81,6 +88,10 @@ model.eval()
 results_path = os.path.join(os.path.join(args.output_folder, 'results'), args.model_name)
 original_path = os.path.join(results_path, 'original')
 rec_path = os.path.join(results_path, 'rec')
+
+print(f"original_path: {original_path}")
+print(f"rec_path: {rec_path}")
+# exit(0)
 if not os.path.exists(results_path):
     os.makedirs(original_path)
     os.makedirs(rec_path)
@@ -91,17 +102,17 @@ indexes = []
 labels = []
 all_images = []
 imageid = 0
-for images, label in test_loader:
+for images, label in tqdm(test_loader):
     images = images.to(args.device)
     x_recons, loss, perplexity, encoding = model(images)
     # save indexes
     index = encoding.argmax(dim=1).view(images.size(0), -1)
     indexes.append(index)
-    all_images.append(images.view(images.size(0), -1))
+    # all_images.append(images.view(images.size(0), -1))
     # save labels
-    labels.append(label)
+    # labels.append(label)
     # save encodings
-    encodings.append(encoding)
+    # encodings.append(encoding)        # TODO: 这一步会造成内存溢出
     # save image
     for x_recon, image in zip(x_recons, images):
         x_recon = tensor2im(x_recon)
@@ -110,6 +121,9 @@ for images, label in test_loader:
         save_image(image, os.path.join(original_path, name))
         save_image(x_recon, os.path.join(rec_path, name))
         imageid += 1
+
+
+exit(0)
 
 # calculate the perplexity in whole test images
 encodings = torch.cat(encodings, dim=0)
