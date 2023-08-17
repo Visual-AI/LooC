@@ -196,8 +196,10 @@ def main(args):
             best_loss = loss_rec
             with open('{0}/best.pt'.format(save_filename), 'wb') as f:
                 torch.save(model.state_dict(), f)
-        with open('{0}/model_{1}.pt'.format(save_filename, epoch + 1), 'wb') as f:
-            torch.save(model.state_dict(), f)
+        # only save the last epoch
+        if epoch+1 == args.num_epochs:
+            with open('{0}/model_{1}.pt'.format(save_filename, epoch + 1), 'wb') as f:
+                torch.save(model.state_dict(), f)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='CVQ-VAE')

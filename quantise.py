@@ -47,6 +47,7 @@ class VectorQuantiser(nn.Module):
         assert temp is None or temp==1.0, "Only for interface compatible with Gumbel"
         assert rescale_logits==False, "Only for interface compatible with Gumbel"
         assert return_logits==False, "Only for interface compatible with Gumbel"
+
         # reshape z -> (batch, height, width, channel) and flatten
         z = rearrange(z, 'b c h w -> b h w c').contiguous()
         z_flattened = z.view(-1, self.embed_dim)
@@ -61,12 +62,14 @@ class VectorQuantiser(nn.Module):
             # cosine distances from z to embeddings e_j 
             normed_z_flattened = F.normalize(z_flattened, dim=1).detach()
             normed_codebook = F.normalize(self.embedding.weight, dim=1)
-            d = torch.einsum('bd,dn->bn', normed_z_flattened, rearrange(normed_codebook, 'n d -> d n'))
+            d = torch.einsum('bd,dn->bn', normed_z_flattened, rearrange(normed_codebook, 'n d -> d n'))  # 4096x8, 300M
 
+        # import pdb
+        # pdb.set_trace()
         # encoding
-        sort_distance, indices = d.sort(dim=1)
+        sort_distance, indices = d.sort(dim=1)      # 4096x8, 2.4G TODO 降低显存, 19600 x 4096, 7 x 7 x 400 = 19600
         # look up the closest point for the indices
-        encoding_indices = indices[:,-1]
+        encoding_indices = indices[:,-1]        # 19600
         encodings = torch.zeros(encoding_indices.unsqueeze(1).shape[0], self.num_embed, device=z.device)
         encodings.scatter_(1, encoding_indices.unsqueeze(1), 1)
 
@@ -93,7 +96,7 @@ class VectorQuantiser(nn.Module):
             if self.anchor in ['closest', 'random', 'probrandom'] and (not self.init):
                 # closest sampling
                 if self.anchor == 'closest':
-                    sort_distance, indices = d.sort(dim=0)
+                    # sort_distance, indices = d.sort(dim=0)  # FIX 无需重复计算
                     random_feat = z_flattened.detach()[indices[-1,:]]
                 # feature pool based random sampling
                 elif self.anchor == 'random':
@@ -110,7 +113,7 @@ class VectorQuantiser(nn.Module):
                     self.init = True
             # contrastive loss
             if self.contras_loss:
-                sort_distance, indices = d.sort(dim=0)
+                # sort_distance, indices = d.sort(dim=0)  # FIX 无需重复计算
                 dis_pos = sort_distance[-max(1, int(sort_distance.size(0)/self.num_embed)):,:].mean(dim=0, keepdim=True)
                 dis_neg = sort_distance[:int(sort_distance.size(0)*1/2),:]
                 dis = torch.cat([dis_pos, dis_neg], dim=0).t() / 0.07
