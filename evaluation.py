@@ -30,7 +30,10 @@ def calculate_score(img_gt, img_test):
 
     psnr_score = psnr(img_gt, img_test, data_range=1)
 
-    ssim_score = ssim(img_gt, img_test, multichannel=True, data_range=1, win_size=11)
+    ssim_score = ssim(img_gt, img_test, multichannel=True, data_range=1, 
+                      win_size=11,
+                      channel_axis=2,
+                      )
 
     lpips_dis = lpips_vgg(torch.from_numpy(img_gt).permute(2, 0, 1), torch.from_numpy(img_test).permute(2, 0, 1), normalize=True)
 

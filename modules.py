@@ -2,7 +2,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from quantise import VectorQuantiser
+from quantise import VectorQuantiser, EfficientVectorQuantiser
+
 
 
 class Residual(nn.Module):
@@ -106,7 +107,8 @@ class Decoder(nn.Module):
 class Model(nn.Module):
     def __init__(self, input_dim, num_hiddens, num_residual_layers, num_residual_hiddens, 
                  num_embeddings, embedding_dim, commitment_cost=0.25, distance='l2', 
-                 anchor='closest', first_batch=False, contras_loss=True, lora_codebook=False):
+                 anchor='closest', first_batch=False, contras_loss=True, lora_codebook=False, evq=False,
+                 slice_num=None):
         super(Model, self).__init__()
         self.lora_codebook = lora_codebook
 
@@ -125,8 +127,12 @@ class Model(nn.Module):
                                       out_channels=_pre_out_channel,
                                       kernel_size=1, 
                                       stride=1)
-
-        self._vq_vae = VectorQuantiser(num_embeddings, embedding_dim, commitment_cost, distance=distance, 
+        if evq:
+            self._vq_vae = EfficientVectorQuantiser(num_embeddings, embedding_dim, commitment_cost, distance=distance, 
+                                       anchor=anchor, first_batch=first_batch, contras_loss=contras_loss,
+                                       slice_num=slice_num)
+        else:
+            self._vq_vae = VectorQuantiser(num_embeddings, embedding_dim, commitment_cost, distance=distance, 
                                        anchor=anchor, first_batch=first_batch, contras_loss=contras_loss)
         
         
