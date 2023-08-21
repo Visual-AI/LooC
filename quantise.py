@@ -19,7 +19,8 @@ class VectorQuantiser(nn.Module):
     contras_loss: if true, use the contras_loss to further improve the performance
     """
     def __init__(self, num_embed, embed_dim, beta, distance='cos', 
-                 anchor='probrandom', first_batch=False, contras_loss=False):
+                 anchor='probrandom', first_batch=False, contras_loss=False, 
+                 slice_num=None):
         super().__init__()
 
         self.num_embed = num_embed
@@ -31,13 +32,15 @@ class VectorQuantiser(nn.Module):
         self.contras_loss = contras_loss
         self.decay = 0.99
         self.init = False
-
+        # slice_num != None, 则是使用slice 的方式处理 CVQ-VAE的codebook
+        self.slice_num = slice_num
+        if self.slice_num:
+            print(f"slice_num = {self.slice_num}, 则是使用slice 的方式处理 CVQ-VAE的codebook. 仅用于test")
         self.pool = FeaturePool(self.num_embed, self.embed_dim)
         self.embedding = nn.Embedding(self.num_embed, self.embed_dim)
         self.embedding.weight.data.uniform_(-1.0 / self.num_embed, 1.0 / self.num_embed)
         self.register_buffer("embed_prob", torch.zeros(self.num_embed))
 
-        
         # TODO 控制不同方法的size一致
         self.codebook_size = self.num_embed * self.embed_dim  
         print(f"codebook_size = num_embed * embed_dim = {self.num_embed} * {self.embed_dim} = {self.codebook_size}")
@@ -50,7 +53,16 @@ class VectorQuantiser(nn.Module):
 
         # reshape z -> (batch, height, width, channel) and flatten
         z = rearrange(z, 'b c h w -> b h w c').contiguous()
-        z_flattened = z.view(-1, self.embed_dim)
+
+        if self.slice_num and not self.training:  # slice_num == None, 则是使用slice 的方式处理 CVQ-VAE的codebook
+            # self.embedding = nn.Embedding(self.num_embed, self.embed_dim)
+            embed_dim = self.embed_dim / self.slice_num
+            embed_weight = self.embedding.weight.reshape(self.num_embed * self.slice_num, embed_dim)
+        else:
+            embed_dim = self.embed_dim
+            embed_weight = self.embedding.weight
+
+        z_flattened = z.view(-1, embed_dim)
 
         # clculate the distance
         if self.distance == 'l2':
@@ -82,8 +94,8 @@ class VectorQuantiser(nn.Module):
         encodings.scatter_(1, encoding_indices.unsqueeze(1), 1)  # encodings.scatter_(dim=1, index=encoding_indices.unsqueeze(1), src=1)
 
         # quantise and unflatten
-        # # [bs * h * w * slice_num, num_embed] [num_embed, embed_dim] --> [bs * h * w * slice_num, embed_dim]
-        z_q = torch.matmul(encodings, self.embedding.weight).view(z.shape)  
+        # # [bs * h * w * slice_num, num_embed] [num_embed, embed_dim] --> [bs * h * w * slice_num, embed_dim] 
+        z_q = torch.matmul(encodings, embed_weight).view(z.shape)
         # compute loss for embedding
         loss = self.beta * torch.mean((z_q.detach()-z)**2) + torch.mean((z_q - z.detach()) ** 2)
         # preserve gradients
