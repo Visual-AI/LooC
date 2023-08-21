@@ -106,7 +106,8 @@ class Decoder(nn.Module):
 class Model(nn.Module):
     def __init__(self, input_dim, num_hiddens, num_residual_layers, num_residual_hiddens, 
                  num_embeddings, embedding_dim, commitment_cost=0.25, distance='l2', 
-                 anchor='closest', first_batch=False, contras_loss=True, lora_codebook=False):
+                 anchor='closest', first_batch=False, contras_loss=True, lora_codebook=False,
+                 slice_num=None):
         super(Model, self).__init__()
         self.lora_codebook = lora_codebook
 
@@ -127,7 +128,8 @@ class Model(nn.Module):
                                       stride=1)
 
         self._vq_vae = VectorQuantiser(num_embeddings, embedding_dim, commitment_cost, distance=distance, 
-                                       anchor=anchor, first_batch=first_batch, contras_loss=contras_loss)
+                                       anchor=anchor, first_batch=first_batch, contras_loss=contras_loss,
+                                       slice_num=slice_num)
         
         
         self._decoder = Decoder(decoder_in_channel,

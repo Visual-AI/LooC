@@ -25,6 +25,7 @@ parser.add_argument('--num_residual_layers', type=int, default=2, help='number o
 # Quantiser parameters
 parser.add_argument('--embedding_dim', type=int, default=64, help='dimention of codebook (default: 64)')
 parser.add_argument('--num_embedding', type=int, default=512, help='number of codebook (default: 512)')
+parser.add_argument('--slice_num', type=int, default=0, help='number of slice (default: 0)')
 parser.add_argument('--distance', type=str, default='cos', help='distance for codevectors and features')
 parser.add_argument('--lora_codebook', action='store_true', help='using lora_codebook')
 
@@ -76,10 +77,19 @@ test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=args.batch_si
 # Define the model
 model = Model(num_channels, args.hidden_size, args.num_residual_layers, args.num_residual_hidden,
                   args.num_embedding, args.embedding_dim, distance=args.distance,
-                  lora_codebook=args.lora_codebook)
+                  lora_codebook=args.lora_codebook,
+                  slice_num=args.slice_num)
 
 # load model
-ckpt = torch.load(os.path.join(os.path.join(os.path.join(args.output_folder, 'models'), args.model_name)))
+# ckpt = torch.load(os.path.join(os.path.join(os.path.join(args.output_folder, 'models'), args.model_name)))
+if '/models/' in args.model_name:
+    model_path = args.model_name
+else:
+    model_path = os.path.join(os.path.join(os.path.join(args.output_folder, 'models'), args.model_name))
+print("Load model from:", model_path)
+ckpt = torch.load(model_path)
+
+
 model.load_state_dict(ckpt)
 model = model.to(args.device)
 model.eval()
