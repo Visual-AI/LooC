@@ -242,9 +242,7 @@ class EfficientVectorQuantiser(nn.Module):
         # encodings = torch.zeros(encoding_indices.shape[0], self.num_embed, device=z.device)  
         # encodings.scatter_(dim=1, index=encoding_indices.unsqueeze(1), src=1)
         # encodings 是每个feature在对应codebook索引位置是否是最近匹配的0/1 标志矩阵。可以看做是codebook在feature中的概率分布情况
-        # import pdb
-        # pdb.set_trace()
-        # -- debug
+
         get_bincount = False
         if not self.training:
             get_bincount = True
@@ -259,17 +257,20 @@ class EfficientVectorQuantiser(nn.Module):
             # nonzero = torch.count_nonzero(bin_count)
             # ic(embed_num - nonzero, z.shape[0], z_flattened.shape[0])
             # ic(embed_num, self.num_embed)
+
             # import pdb
             # pdb.set_trace()
             # encoding_indices_2 2048
 
-            encodings = torch.zeros(encoding_indices.shape[0], self.num_embed, dtype=torch.float, device=z.device)   # 2048, 512
-            encodings.scatter_(1, encoding_indices.unsqueeze(1), 1)
-            # encodings.scatter_(dim=1, index=encoding_indices.unsqueeze(1), src=torch.FloatTensor([1]).to(device=z.device))
-            min_encodings = encodings
+            # encodings = torch.zeros(encoding_indices.shape[0], self.num_embed, dtype=torch.float, device=z.device)   # 2048, 512
+            # encodings.scatter_(1, encoding_indices.unsqueeze(1), 1)
+            # avg_probs = bin_count / torch.sum(bin_count)
+            # perplexity = torch.exp(-torch.sum(avg_probs * torch.log(avg_probs + 1e-10)))
+            # min_encodings = encodings
         else:
             bin_count = None
-            min_encodings = None
+            # min_encodings = None
+            # perplexity = None
         # 对于未匹配的codebook怎么处理？
 
         # quantise and unflatten
@@ -288,11 +289,10 @@ class EfficientVectorQuantiser(nn.Module):
         # count
         # import pdb
         # pdb.set_trace()
-        # TODO remove
+        # TODO remove [Done: 可使用bincountlai计算perplexity，要比sort快很多，也更省显存]
         # avg_probs = torch.mean(encodings, dim=0)  # 可以用bincount来代替
         # perplexity = torch.exp(-torch.sum(avg_probs * torch.log(avg_probs + 1e-10)))
         # min_encodings = encodings
-        perplexity = None
 
         # online clustered reinitialisation for unoptimized points
         if self.training:
@@ -336,8 +336,9 @@ class EfficientVectorQuantiser(nn.Module):
                 contra_loss = F.cross_entropy(dis, torch.zeros((dis.size(0),), dtype=torch.long, device=dis.device))
                 loss +=  contra_loss
 
-        perplexity = None       # TODO 
-        return z_q, loss, (perplexity, min_encodings, encoding_indices, bin_count)
+        # perplexity = None       # TODO 
+        # return z_q, loss, (perplexity, min_encodings, encoding_indices, bin_count)
+        return z_q, loss, (encoding_indices, bin_count)
 
 
 

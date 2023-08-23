@@ -116,7 +116,7 @@ bincounts = None
 imageid = 0
 for images, label in tqdm(test_loader):
     images = images.to(args.device)
-    x_recons, loss, perplexity, encoding, bincount = model(images)  # TODO  # x_recon, loss, perplexity, encodings, bincount
+    x_recons, loss, bincount = model(images)  # TODO  # x_recon, loss, perplexity, encodings, bincount
     # -- save indexes
     # index = encoding.argmax(dim=1).view(images.size(0), -1)
     # indexes.append(index)

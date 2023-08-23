@@ -35,7 +35,8 @@ def train(data_loader, model, optimizer, args, writer, data_variance=1):
     for images, _ in data_loader:
         images = images.to(args.device)
         optimizer.zero_grad()
-        x, loss_vq, perplexity, _ = model(images)
+        # x, loss_vq, perplexity, _ = model(images)
+        x, loss_vq, _ = model(images)
 
         # loss function
         loss_recons = F.mse_loss(x, images) / data_variance

@@ -152,7 +152,9 @@ class Model(nn.Module):
     def forward(self, x):
         z = self._encoder(x)
         z = self._pre_vq_conv(z)
-        quantized, loss, (perplexity, encodings, _, bincount) = self._vq_vae(z)
+        # quantized, loss, (perplexity, encodings, _, bincount) = self._vq_vae(z)
+        quantized, loss, (_, bincount) = self._vq_vae(z)
         x_recon = self._decoder(quantized)
 
-        return x_recon, loss, perplexity, encodings, bincount
+        # return x_recon, loss, perplexity, encodings, bincount
+        return x_recon, loss, bincount
