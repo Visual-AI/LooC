@@ -80,7 +80,7 @@ model = Model(num_channels, args.hidden_size, args.num_residual_layers, args.num
                   args.num_embedding, args.embedding_dim, distance=args.distance,
                   lora_codebook=args.lora_codebook,
                   evq=args.evq,
-                  slice_num=args.slice_num)
+                  slice_num=args.slice_num)  # TODO 去除这个参数，这个参数的含义很容易混淆。
 
 # load model
 # ckpt = torch.load(os.path.join(os.path.join(os.path.join(args.output_folder, 'models'), args.model_name)))
@@ -102,64 +102,118 @@ rec_path = os.path.join(results_path, 'rec')
 
 print(f"original_path: {original_path}")
 print(f"rec_path: {rec_path}")
-# exit(0)
+
 if not os.path.exists(results_path):
     os.makedirs(original_path)
     os.makedirs(rec_path)
 
 # test model
 encodings = []
-indexes = []
-labels = []
-all_images = []
+# indexes = []
+# labels = []
+# all_images = []
+bincounts = None
 imageid = 0
 for images, label in tqdm(test_loader):
     images = images.to(args.device)
-    x_recons, loss, perplexity, encoding = model(images)  # TODO  # perplexity, encoding
-    # save indexes
+    x_recons, loss, perplexity, encoding, bincount = model(images)  # TODO  # x_recon, loss, perplexity, encodings, bincount
+    # -- save indexes
     # index = encoding.argmax(dim=1).view(images.size(0), -1)
     # indexes.append(index)
     
     # all_images.append(images.view(images.size(0), -1))
-    # save labels
+    # -- save labels
     # labels.append(label)
-    # save encodings
+    # import pdb
+    # pdb.set_trace()
+    # bincounts.append(bincount)
+    if bincounts is None:
+        bincounts = bincount
+    else:
+        bincounts += bincount
+
+    # -- save encodings
     # encodings.append(encoding)        # TODO: 这一步会造成内存溢出
-    # save image
-    for x_recon, image in zip(x_recons, images):
-        x_recon = tensor2im(x_recon)
-        image = tensor2im(image)
-        name = str(imageid).zfill(8) + '.jpg'
-        save_image(image, os.path.join(original_path, name))
-        save_image(x_recon, os.path.join(rec_path, name))
-        imageid += 1
+
+    # -- save image
+    # for x_recon, image in zip(x_recons, images):
+    #     x_recon = tensor2im(x_recon)
+    #     image = tensor2im(image)
+    #     name = str(imageid).zfill(8) + '.jpg'
+    #     save_image(image, os.path.join(original_path, name))
+    #     save_image(x_recon, os.path.join(rec_path, name))
+    #     imageid += 1
 
 
-exit(0)
+# ---- 使用bincount来获取usage和perplexity
+print("### calc from bincounts")
+fig_id = 1
+usage = torch.count_nonzero(bincounts) / torch.numel(bincounts) * 100
+print("usage of the codebook vector: {}%".format(usage))
 
+total_count = torch.sum(bincounts)
+avg_probs = bincounts / total_count
+perplexity = torch.exp(-torch.sum(avg_probs * torch.log(avg_probs + 1e-10)))
+print("the perplexity of the codebook: {}".format(perplexity))
+
+# save the sorted codebook count
+sort_count1 = -np.sort(-bincounts.cpu().numpy().astype(np.float32))
+
+plt.figure(fig_id)
+plt.plot(bincounts.cpu().numpy().astype(np.float32))
+plt.ylabel("Count Number")
+plt.xlabel("Vocabulary Index")
+fig_path = os.path.join(results_path, 'validation_bc.png')
+print(fig_path)
+plt.savefig(os.path.join(results_path, 'validation_bc.png'))
+
+fig_id += 1
+plt.figure(fig_id)
+plt.plot(sort_count1)
+plt.ylabel("Count Number")
+plt.xlabel("Vocabulary Index")
+fig_path = os.path.join(results_path, 'csort_validation_bc.png')
+print(fig_path)
+plt.savefig(os.path.join(results_path,'csort_validation_bc.png'))
+
+
+########################################
+"""
+print("### calc from encodings")
 # calculate the perplexity in whole test images
 encodings = torch.cat(encodings, dim=0)
 # save the codebook count
 count = torch.sum(encodings, dim=0).cpu().numpy()
-usage = 1 - len(count[count==0])/len(count)
-plt.figure(1)
-plt.plot(count)
-plt.ylabel("Count Number")
-plt.xlabel("Vocabulary Index")
-plt.savefig(os.path.join(results_path, 'validation.png'))
-print("usage of the codebook vector: {}".format(usage))
-# save the sorted codebook count
-sort_count = -np.sort(-count)
-plt.plot(sort_count)
-plt.ylabel("Count Number")
-plt.xlabel("Vocabulary Index")
-plt.savefig(os.path.join(results_path,'csort_validation.png'))
+usage = (1 - len(count[count==0])/len(count)) * 100.
+print("usage of the codebook vector: {}%".format(usage))
+
 avg_probs = torch.mean(encodings, dim=0)
 perplexity = torch.exp(-torch.sum(avg_probs * torch.log(avg_probs + 1e-10)))
 print("the perplexity of the codebook: {}".format(perplexity))
 
+# save the sorted codebook count
+sort_count = -np.sort(-count)
+
+fig_id += 1
+plt.figure(fig_id)
+plt.plot(count)
+plt.ylabel("Count Number")
+plt.xlabel("Vocabulary Index")
+plt.savefig(os.path.join(results_path, 'validation_en.png'))
+
+fig_id += 1
+plt.figure(fig_id)
+plt.plot(sort_count)
+plt.ylabel("Count Number")
+plt.xlabel("Vocabulary Index")
+plt.savefig(os.path.join(results_path,'csort_validation_en.png'))
+
+"""
+
+########################################
 # visualize codebook
-plt.figure(2)
+fig_id += 1
+plt.figure(fig_id)
 code_book = model._vq_vae.embedding.weight.data.cpu()
 tsne = TSNE(n_components=2, perplexity=5, n_iter=5000, verbose=True)
 projections = tsne.fit_transform(code_book)

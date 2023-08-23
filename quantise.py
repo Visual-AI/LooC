@@ -4,6 +4,7 @@ import torch.nn.functional as F
 import numpy as np
 from torch import einsum
 from einops import rearrange
+from icecream import ic 
 
 
 class VectorQuantiser(nn.Module):
@@ -205,6 +206,7 @@ class EfficientVectorQuantiser(nn.Module):
             embed_weight = self.embedding.weight.reshape((embed_num, embed_dim))
         else:
             embed_dim = self.embed_dim
+            embed_num = self.num_embed
             embed_weight = self.embedding.weight
         
         z_flattened = z.view(-1, embed_dim)
@@ -238,7 +240,37 @@ class EfficientVectorQuantiser(nn.Module):
         # [bs * h * w * slice_num, num_embed] # embed_dim 越小，则slice_num越大；codebook_size相同时，self.num_embed也越大；
         # 因此占用显存较大，呈2次方增长
         # encodings = torch.zeros(encoding_indices.shape[0], self.num_embed, device=z.device)  
-        # encodings.scatter_(1, encoding_indices.unsqueeze(1), 1)  # encodings.scatter_(dim=1, index=encoding_indices.unsqueeze(1), src=1)
+        # encodings.scatter_(dim=1, index=encoding_indices.unsqueeze(1), src=1)
+        # encodings 是每个feature在对应codebook索引位置是否是最近匹配的0/1 标志矩阵。可以看做是codebook在feature中的概率分布情况
+        # import pdb
+        # pdb.set_trace()
+        # -- debug
+        get_bincount = False
+        if not self.training:
+            get_bincount = True
+
+        if get_bincount:
+            bin_count = torch.bincount(encoding_indices)  # bincount 来获得不同codebook的出现频率
+            # 补全bin_count
+            if torch.numel(bin_count) < embed_num:
+                miss_num = embed_num - torch.numel(bin_count)
+                bin_count = F.pad(bin_count, [0, miss_num], "constant", 0)
+
+            # nonzero = torch.count_nonzero(bin_count)
+            # ic(embed_num - nonzero, z.shape[0], z_flattened.shape[0])
+            # ic(embed_num, self.num_embed)
+            # import pdb
+            # pdb.set_trace()
+            # encoding_indices_2 2048
+
+            encodings = torch.zeros(encoding_indices.shape[0], self.num_embed, dtype=torch.float, device=z.device)   # 2048, 512
+            encodings.scatter_(1, encoding_indices.unsqueeze(1), 1)
+            # encodings.scatter_(dim=1, index=encoding_indices.unsqueeze(1), src=torch.FloatTensor([1]).to(device=z.device))
+            min_encodings = encodings
+        else:
+            bin_count = None
+            min_encodings = None
+        # 对于未匹配的codebook怎么处理？
 
         # quantise and unflatten
         # # [bs * h * w * slice_num, num_embed] [num_embed, embed_dim] --> [bs * h * w * slice_num, embed_dim]
@@ -257,7 +289,7 @@ class EfficientVectorQuantiser(nn.Module):
         # import pdb
         # pdb.set_trace()
         # TODO remove
-        # avg_probs = torch.mean(encodings, dim=0)
+        # avg_probs = torch.mean(encodings, dim=0)  # 可以用bincount来代替
         # perplexity = torch.exp(-torch.sum(avg_probs * torch.log(avg_probs + 1e-10)))
         # min_encodings = encodings
         perplexity = None
@@ -276,12 +308,18 @@ class EfficientVectorQuantiser(nn.Module):
                     random_feat = z_flattened.detach()[indices[-1,:]]  # 取最接近codebook的self.num_embed个flattened feature vector 
                 # feature pool based random sampling
                 elif self.anchor == 'random':
-                    random_feat = self.pool.query(z_flattened.detach())
+                    random_feat = self.pool.query(z_flattened.detach())  # 将以往的feature保存在feature pool中，随机从中给出feature
                 # probabilitical based random sampling
                 elif self.anchor == 'probrandom':
                     norm_distance = F.softmax(dist.t(), dim=1)  #  消耗显存
                     prob = torch.multinomial(norm_distance, num_samples=1).view(-1)
                     random_feat = z_flattened.detach()[prob]
+                elif self.anchor == 'chance_random':  # 对feature的每一位，增加一个[-1, 1] 之间的随机扰动
+                    random_feat = (torch.rand((z_flattened.size(0), self.embed_dim)) * 2 - 1)/ z_flattened.size(0)
+                    raise NotImplementedError
+                    
+
+
                 # decay parameter based on the average usage
                 # # TODO remove
                 # decay = torch.exp(-(self.embed_prob*self.num_embed*10)/(1-self.decay)-1e-3).unsqueeze(1).repeat(1, self.embed_dim)
@@ -299,8 +337,7 @@ class EfficientVectorQuantiser(nn.Module):
                 loss +=  contra_loss
 
         perplexity = None       # TODO 
-        min_encodings = None
-        return z_q, loss, (perplexity, min_encodings, encoding_indices)
+        return z_q, loss, (perplexity, min_encodings, encoding_indices, bin_count)
 
 
 
