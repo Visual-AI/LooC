@@ -108,7 +108,9 @@ class Model(nn.Module):
     def __init__(self, input_dim, num_hiddens, num_residual_layers, num_residual_hiddens, 
                  num_embeddings, embedding_dim, commitment_cost=0.25, distance='l2', 
                  anchor='closest', first_batch=False, contras_loss=True, lora_codebook=False, evq=False,
-                 slice_num=None):
+                 slice_num=None,
+                 split_type='fixed',
+                 args=None):
         super(Model, self).__init__()
         self.lora_codebook = lora_codebook
 
@@ -130,7 +132,9 @@ class Model(nn.Module):
         if evq:
             self._vq_vae = EfficientVectorQuantiser(num_embeddings, embedding_dim, commitment_cost, distance=distance, 
                                        anchor=anchor, first_batch=first_batch, contras_loss=contras_loss,
-                                       slice_num=slice_num)
+                                       slice_num=slice_num,
+                                       split_type=split_type,
+                                       args=args)
         else:
             self._vq_vae = VectorQuantiser(num_embeddings, embedding_dim, commitment_cost, distance=distance, 
                                        anchor=anchor, first_batch=first_batch, contras_loss=contras_loss)
@@ -153,8 +157,8 @@ class Model(nn.Module):
         z = self._encoder(x)
         z = self._pre_vq_conv(z)
         # quantized, loss, (perplexity, encodings, _, bincount) = self._vq_vae(z)
-        quantized, loss, (_, bincount) = self._vq_vae(z)
+        quantized, loss, (encoding_indices, bincount) = self._vq_vae(z)
         x_recon = self._decoder(quantized)
 
         # return x_recon, loss, perplexity, encodings, bincount
-        return x_recon, loss, bincount
+        return x_recon, loss, encoding_indices, bincount

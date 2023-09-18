@@ -36,7 +36,7 @@ def train(data_loader, model, optimizer, args, writer, data_variance=1):
         images = images.to(args.device)
         optimizer.zero_grad()
         # x, loss_vq, perplexity, _ = model(images)
-        x, loss_vq, _ = model(images)
+        x, loss_vq, _, _ = model(images)
 
         # loss function
         loss_recons = F.mse_loss(x, images) / data_variance
@@ -171,8 +171,10 @@ def main(args):
     model = Model(num_channels, args.hidden_size, args.num_residual_layers, args.num_residual_hidden,
                   args.num_embedding, args.embedding_dim, args.commitment_cost, args.distance,
                   args.anchor, args.first_batch, args.contras_loss,
-                  lora_codebook=args.lora_codebook,  # TODO config
+                  lora_codebook=args.lora_codebook,  # TODO config 改为更加合适的名字， slice_codebook?
                   evq=args.evq,
+                  split_type=args.split_type,
+                  args=args,
                   ).to(args.device)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
@@ -219,10 +221,13 @@ if __name__ == '__main__':
     parser.add_argument('--commitment_cost', type=float, default=0.25, help='hyperparameter for the commitment loss')
     parser.add_argument('--distance', type=str, default='cos', help='distance for codevectors and features')
     parser.add_argument('--anchor', type=str, default='closest', help='anchor sampling methods (random, closest, probrandom)')
+    parser.add_argument('--split_type', type=str, default='fixed', help='split methods (fixed, interval, random)')
     parser.add_argument('--first_batch', action='store_true', help='offline version with only one time reinitialisation')
     parser.add_argument('--contras_loss', action='store_true', help='using contrastive loss')
     parser.add_argument('--lora_codebook', action='store_true', help='using lora_codebook')
     parser.add_argument('--evq', action='store_true', help='using EfficientVectorQuantiser')
+    parser.add_argument('--scale_grad_by_freq', action='store_true', help='using scale_grad_by_freq in the codebook embedding')
+    
     # Optimization
     parser.add_argument('--seed', type=int, default=42, help="seed for everything")
     parser.add_argument('--num_epochs', type=int, default=500, help='number of epochs (default: 100)')

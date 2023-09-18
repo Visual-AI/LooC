@@ -14,9 +14,13 @@ parser = argparse.ArgumentParser(description='Image quality evaluations on the d
 parser.add_argument('--gt_path', type=str, default='../results/', help='path to original gt data')
 parser.add_argument('--g_path', type=str, default='../results.', help='path to the generated data')
 parser.add_argument('--num_test', type=int, default=0, help='how many examples to load for testing')
+parser.add_argument('--use_gpu', action='store_true', help='turn on flag to use GPU')
 
 args = parser.parse_args()
 lpips_vgg = lpips.LPIPS(net='vgg')
+
+if (args.use_gpu):
+	lpips_vgg.cuda()
 
 def calculate_score(img_gt, img_test):
     """
@@ -34,10 +38,19 @@ def calculate_score(img_gt, img_test):
                       win_size=11,
                       channel_axis=2,
                       )
+    img0 = torch.from_numpy(img_gt).permute(2, 0, 1)
+    img1 = torch.from_numpy(img_test).permute(2, 0, 1)
+    if args.use_gpu:
+        img0 = img0.cuda()
+        img1 = img1.cuda()
+    lpips_dis = lpips_vgg(img0, img1, normalize=True)
 
-    lpips_dis = lpips_vgg(torch.from_numpy(img_gt).permute(2, 0, 1), torch.from_numpy(img_test).permute(2, 0, 1), normalize=True)
+    if args.use_gpu:
+        lpips_dis = lpips_dis.cpu().data.numpy().item()
+    else:
+        lpips_dis = lpips_dis.data.numpy().item()
 
-    return l1loss, ssim_score, psnr_score, lpips_dis.data.numpy().item()
+    return l1loss, ssim_score, psnr_score, lpips_dis
 
 
 if __name__ == '__main__':
