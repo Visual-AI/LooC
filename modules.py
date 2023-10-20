@@ -114,13 +114,16 @@ class Model(nn.Module):
         super(Model, self).__init__()
         self.lora_codebook = lora_codebook
 
+        # TODO: 修改为 根据参数，来计算获得
+        # 由于 新的codebook中，embedding_dim*slice_num 才是最终输出的dim
         if self.lora_codebook:
             decoder_in_channel = num_hiddens
             _pre_out_channel = num_hiddens
-            
         else:
             decoder_in_channel = embedding_dim
             _pre_out_channel = embedding_dim
+        print(f"decoder_in_channel = {decoder_in_channel}")
+        print(f"_pre_out_channel = {_pre_out_channel}")
             
         self._encoder = Encoder(input_dim, num_hiddens,
                                 num_residual_layers, 
@@ -129,6 +132,7 @@ class Model(nn.Module):
                                       out_channels=_pre_out_channel,
                                       kernel_size=1, 
                                       stride=1)
+        # TODO 仅保留EfficientVectorQuantiser，并将所需参数进行YAML保存。并且在YAML中，进行分组设置参数
         if evq:
             self._vq_vae = EfficientVectorQuantiser(num_embeddings, embedding_dim, commitment_cost, distance=distance, 
                                        anchor=anchor, first_batch=first_batch, contras_loss=contras_loss,
@@ -157,8 +161,8 @@ class Model(nn.Module):
         z = self._encoder(x)
         z = self._pre_vq_conv(z)
         # quantized, loss, (perplexity, encodings, _, bincount) = self._vq_vae(z)
-        quantized, loss, (encoding_indices, bincount) = self._vq_vae(z)
+        quantized, loss, sim_loss, (encoding_indices, bincount) = self._vq_vae(z)
         x_recon = self._decoder(quantized)
 
         # return x_recon, loss, perplexity, encodings, bincount
-        return x_recon, loss, encoding_indices, bincount
+        return x_recon, loss, sim_loss, encoding_indices, bincount

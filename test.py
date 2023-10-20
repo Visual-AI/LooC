@@ -364,7 +364,7 @@ def main(args):
     debug_cnt = 0
     for images, label in tqdm(test_loader):
         images = images.to(args.device)
-        x_recons, loss, encoding_indices, bincount = model(images)  # TODO  # x_recon, loss, perplexity, encodings, bincount
+        x_recons, loss, _, encoding_indices, bincount = model(images)  # TODO  # x_recon, loss, perplexity, encodings, bincount
         # -- save indexes
         # index = encoding.argmax(dim=1).view(images.size(0), -1)
         # indexes.append(index)
@@ -415,7 +415,7 @@ def main(args):
                 imageid += 1
 
                 vis_feature = False
-                vis_feature = True
+                # vis_feature = True
                 if vis_feature:
                     # TODO 不同的slice分别展示
                     match_idx = idx  # 1024x8, bs=16, [h, w, slice_num]
@@ -423,9 +423,10 @@ def main(args):
                     vis_match(slice_num, codebook_colors, match_idx, fig_path, image, x_recon)
                 if imageid >= debug_max:
                     break
-                
-        if imageid >= debug_max:
-            break
+        
+        # debug： 用于vis_feature？
+        # if imageid >= debug_max:
+        #     break
 
     # idx = 0
     # calc_usage_and_perplexity(

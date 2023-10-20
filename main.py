@@ -36,7 +36,7 @@ def train(data_loader, model, optimizer, args, writer, data_variance=1):
         images = images.to(args.device)
         optimizer.zero_grad()
         # x, loss_vq, perplexity, _ = model(images)
-        x, loss_vq, _, _ = model(images)
+        x, loss_vq, loss_sim, _, _ = model(images)
 
         # loss function
         loss_recons = F.mse_loss(x, images) / data_variance
@@ -45,6 +45,7 @@ def train(data_loader, model, optimizer, args, writer, data_variance=1):
 
         writer.add_scalar('loss/train/reconstruction', loss_recons.item(), args.steps)
         writer.add_scalar('loss/train/quantization', loss_vq.item(), args.steps)
+        writer.add_scalar('loss/train/quantization_sim', loss_sim.item(), args.steps)
         # writer.add_scalar('loss/train/perplexity', perplexity.item(), args.steps)
 
         optimizer.step()
@@ -58,7 +59,7 @@ def test(data_loader, model, args, writer):
         loss_recons, loss_vq = 0., 0.
         for images, _ in data_loader:
             images = images.to(args.device)
-            x, loss, _, _ = model(images)
+            x, loss, loss_sim, _, _ = model(images)
             loss_recons += F.mse_loss(x, images)
             loss_vq += loss
         loss_recons /= len(data_loader)
@@ -67,6 +68,7 @@ def test(data_loader, model, args, writer):
     # Logs
     writer.add_scalar('loss/test/reconstruction', loss_recons.item(), args.steps)
     writer.add_scalar('loss/test/quantization', loss_vq.item(), args.steps)
+    writer.add_scalar('loss/test/quantization_sim', loss_sim.item(), args.steps)
 
     return loss_recons.item(), loss_vq.item()
 
@@ -74,7 +76,7 @@ def test(data_loader, model, args, writer):
 def generate_samples(images, model, args):
     with torch.no_grad():
         images = images.to(args.device)
-        x, _, _, _ = model(images)
+        x, _, _, _, _ = model(images)
     return x
 
 

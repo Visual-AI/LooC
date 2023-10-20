@@ -5,7 +5,7 @@ CUDA_VISIBLE_DEVICES=1 python main.py \
 --data_folder /data2/common/cifar \
 --dataset cifar10 \
 --output_folder ./debug \
---exp_name cifar10_cos_closest_256x128_debug01 \
+--exp_name cifar10_cos_closest_256x128_debug02 \
 --batch_size 600 \
 --device cuda \
 --num_epochs 500 \
@@ -15,7 +15,7 @@ CUDA_VISIBLE_DEVICES=1 python main.py \
 --distance cos \
 --num_workers 8 \
 --evq \
---anchor closest 2>&1 | tee ./debug/cifar10_cos_closest_512x64_debug01.log
+--anchor closest 2>&1 | tee ./debug/cifar10_cos_closest_512x64_debug02.log
 
 
 CUDA_VISIBLE_DEVICES=3 python test.py \
