@@ -1,18 +1,21 @@
 
 __pycache__/
 
-output/
+
 output
-output_del/
-output_slice/
 output*/
 
+.output
+.output*/
 
-debug/
+.logs
+.logs/
+
+debug
+debug*/
 
 scripts/*.sh
 
 wandb
-wandb/
-
+wandb*/
 
