@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from quantise import VectorQuantiser, EfficientVectorQuantiser
+from quantise import EfficientVectorQuantiser
 
 
 
@@ -107,21 +107,15 @@ class Decoder(nn.Module):
 class Model(nn.Module):
     def __init__(self, input_dim, num_hiddens, num_residual_layers, num_residual_hiddens, 
                  num_embeddings, embedding_dim, commitment_cost=0.25, distance='l2', 
-                 anchor='closest', first_batch=False, contras_loss=True, lora_codebook=False, evq=False,
-                 slice_num=None,
+                 anchor='closest', first_batch=False, contras_loss=True, 
                  split_type='fixed',
                  args=None):
         super(Model, self).__init__()
-        self.lora_codebook = lora_codebook
 
-        # TODO: 修改为 根据参数，来计算获得
-        # 由于 新的codebook中，embedding_dim*slice_num 才是最终输出的dim
-        if self.lora_codebook:
-            decoder_in_channel = num_hiddens
-            _pre_out_channel = num_hiddens
-        else:
-            decoder_in_channel = embedding_dim
-            _pre_out_channel = embedding_dim
+        # num_hiddens == embedding_dim*slice_num 才是最终输出的dim
+        decoder_in_channel = num_hiddens
+        _pre_out_channel = num_hiddens
+
         print(f"decoder_in_channel = {decoder_in_channel}")
         print(f"_pre_out_channel = {_pre_out_channel}")
             
@@ -132,24 +126,16 @@ class Model(nn.Module):
                                       out_channels=_pre_out_channel,
                                       kernel_size=1, 
                                       stride=1)
-        # TODO 仅保留EfficientVectorQuantiser，并将所需参数进行YAML保存。并且在YAML中，进行分组设置参数
-        if evq:
-            self._vq_vae = EfficientVectorQuantiser(num_embeddings, embedding_dim, commitment_cost, distance=distance, 
+        self._vq_vae = EfficientVectorQuantiser(num_embeddings, embedding_dim, commitment_cost, distance=distance, 
                                        anchor=anchor, first_batch=first_batch, contras_loss=contras_loss,
-                                       slice_num=slice_num,
                                        split_type=split_type,
-                                       args=args)
-        else:
-            self._vq_vae = VectorQuantiser(num_embeddings, embedding_dim, commitment_cost, distance=distance, 
-                                       anchor=anchor, first_batch=first_batch, contras_loss=contras_loss)
-        
+                                       args=args)        
         
         self._decoder = Decoder(decoder_in_channel,
                                 num_hiddens, 
                                 num_residual_layers, 
                                 num_residual_hiddens,
                                 input_dim)
-        print("lora_codebook=", self.lora_codebook)
 
     def encode(self, x):
         z_e_x = self._encoder(x)
@@ -161,8 +147,8 @@ class Model(nn.Module):
         z = self._encoder(x)
         z = self._pre_vq_conv(z)
         # quantized, loss, (perplexity, encodings, _, bincount) = self._vq_vae(z)
-        quantized, loss, sim_loss, (encoding_indices, bincount) = self._vq_vae(z)
+        quantized, loss, (encoding_indices, bincount) = self._vq_vae(z)
         x_recon = self._decoder(quantized)
 
         # return x_recon, loss, perplexity, encodings, bincount
-        return x_recon, loss, sim_loss, encoding_indices, bincount
+        return x_recon, loss, encoding_indices, bincount

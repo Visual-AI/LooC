@@ -16,9 +16,13 @@ import torch
 from torchvision import transforms, datasets
 
 from modules import Model
+from dataset import ffhq
+
 from util import tensor2im, save_image
 from tqdm import tqdm
 from icecream import ic 
+
+import torch.utils.data as data_utils
 
 
 # 对get_cmap稍微整理下
@@ -251,6 +255,7 @@ def vis_match(slice_num, codebook_colors, match_idx, fig_path, ori_img=None, rec
 
 
 def main(args):
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     # load dataset
     transform = transforms.Compose([
                 transforms.ToTensor(),
@@ -281,42 +286,73 @@ def main(args):
         ])
         test_dataset = datasets.CelebA(args.data_folder, split='valid', download=True, transform=transform)
         num_channels = 3
+    elif args.dataset == 'imagenet':  # imagenet
+        print("Loading imagenet")
+        transform = transforms.Compose([
+        transforms.Resize([256, 256]),  # TODO size = ?
+        transforms.ToTensor(),
+        transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225))
+        ])
+        test_dataset = datasets.ImageNet(args.data_folder, split='val', transform=transform)  # 50k
+        num_channels = 3
 
+        indices = torch.arange(1000)  # 1k
+        test_dataset = data_utils.Subset(test_dataset, indices)
+
+        print("len(test_dataset)", len(test_dataset))
+    elif args.dataset == 'ffhq':
+        print("Loading ffhq")
+        transform = transforms.Compose([
+        transforms.Resize((256,256)),
+        transforms.ToTensor(),
+        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+        ])
+        test_dataset = ffhq.ImagesFolder(args.data_folder, split='val', transform=transform)  # 10k
+        num_channels = 3
+        test_dataset  = data_utils.Subset( test_dataset, torch.arange(1000))   #  1k
     else:
         raise NotImplementedError
 
     # Define the dataloaders
-    test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
+    test_loader = torch.utils.data.DataLoader(test_dataset, 
+                                              batch_size=16, # args.batch_size, 
+                                              shuffle=False)
 
     # Define the model
     model = Model(num_channels, args.hidden_size, args.num_residual_layers, args.num_residual_hidden,
-                      args.num_embedding, args.embedding_dim, distance=args.distance,
-                      lora_codebook=args.lora_codebook,
-                      evq=args.evq,
-                      slice_num=args.slice_num,  # TODO 去除这个参数，这个参数的含义很容易混淆。
+                      args.num_embedding, args.dim_embedding, distance=args.distance,
+                    #   lora_codebook=args.lora_codebook,
+                    #   evq=args.evq,
+                    #   slice_num=args.slice_num,  # TODO 去除这个参数，这个参数的含义很容易混淆。
                       split_type=args.split_type,
                       args=args,
                       ) 
 
     # load model
     # ckpt = torch.load(os.path.join(os.path.join(os.path.join(args.output_folder, 'models'), args.model_name)))
-    if '/models/' in args.model_name:
-        model_path = args.model_name
-    else:
-        model_path = os.path.join(os.path.join(os.path.join(args.output_folder, 'models'), args.model_name))
+    # if '/models/' in args.model_name:
+    #     model_path = args.model_name
+    # else:
+    #     model_path = os.path.join(os.path.join(os.path.join(args.output_folder, 'models'), args.model_name))
+
+    model_path = os.path.join(args.output_folder, 'models', args.exp_name, 'best.pt')
+
     print("Load model from:", model_path)
     ckpt = torch.load(model_path)
 
     model.load_state_dict(ckpt)
-    model = model.to(args.device)
+    model = model.to(device)
     model.eval()
 
     # store results
-    results_path = os.path.join(os.path.join(args.output_folder, 'results'), args.model_name)
+    # results_path = os.path.join(os.path.join(args.output_folder, 'results'), args.model_name)
+    results_path = os.path.join(args.output_folder, 'results', args.exp_name)
+
     original_path = os.path.join(results_path, 'original')
     vis_path = os.path.join(results_path, 'vis')
     rec_path = os.path.join(results_path, 'rec')
 
+    print(f"results_path: {results_path}")
     print(f"original_path: {original_path}")
     print(f"rec_path: {rec_path}")
     print(f"vis_path: {vis_path}")
@@ -350,7 +386,7 @@ def main(args):
     imageid = 0
 
     # slice_num = 1
-    slice_num = args.hidden_size // args.embedding_dim
+    slice_num = args.hidden_size // args.dim_embedding
     ic(slice_num)
 
     model_output_list = [
@@ -363,8 +399,8 @@ def main(args):
     debug_max = 20
     debug_cnt = 0
     for images, label in tqdm(test_loader):
-        images = images.to(args.device)
-        x_recons, loss, _, encoding_indices, bincount = model(images)  # TODO  # x_recon, loss, perplexity, encodings, bincount
+        images = images.to(device)
+        x_recons, loss_dict, encoding_indices, bincount = model(images)  # TODO  # x_recon, loss, perplexity, encodings, bincount
         # -- save indexes
         # index = encoding.argmax(dim=1).view(images.size(0), -1)
         # indexes.append(index)
@@ -468,30 +504,36 @@ def main(args):
             )
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='CVQ-VAE')
+    # parser = argparse.ArgumentParser(description='CVQ-VAE')
     # General
-    parser.add_argument('--data_folder', type=str, help='name of the data folder')
-    parser.add_argument('--dataset', type=str, help='name of the dataset (mnist, fashion-mnist, cifar10)')
-    parser.add_argument('--batch_size', type=int, default=16, help='batch size (default: 16)')
-    # Latent space
-    parser.add_argument('--hidden_size', type=int, default=128, help='size of the latent vectors (default: 128)')
-    parser.add_argument('--num_residual_hidden', type=int, default=32, help='size of the redisual layers (default: 32)')
-    parser.add_argument('--num_residual_layers', type=int, default=2, help='number of residual layers (default: 2)')
-    # Quantiser parameters
-    parser.add_argument('--embedding_dim', type=int, default=64, help='dimention of codebook (default: 64)')
-    parser.add_argument('--num_embedding', type=int, default=512, help='number of codebook (default: 512)')
-    parser.add_argument('--slice_num', type=int, default=0, help='number of slice (default: 0)')
-    parser.add_argument('--distance', type=str, default='cos', help='distance for codevectors and features')
-    parser.add_argument('--lora_codebook', action='store_true', help='using lora_codebook')
-    parser.add_argument('--evq', action='store_true', help='using EfficientVectorQuantiser')
-    parser.add_argument('--scale_grad_by_freq', action='store_true', help='using scale_grad_by_freq in the codebook embedding')
-    parser.add_argument('--split_type', type=str, default='fixed', help='split methods (fixed, interval, random)')
+    # parser.add_argument('--data_folder', type=str, help='name of the data folder')
+    # parser.add_argument('--dataset', type=str, help='name of the dataset (mnist, fashion-mnist, cifar10)')
+    # parser.add_argument('--batch_size', type=int, default=16, help='batch size (default: 16)')
+    # # Latent space
+    # parser.add_argument('--hidden_size', type=int, default=128, help='size of the latent vectors (default: 128)')
+    # parser.add_argument('--num_residual_hidden', type=int, default=32, help='size of the redisual layers (default: 32)')
+    # parser.add_argument('--num_residual_layers', type=int, default=2, help='number of residual layers (default: 2)')
+    # # Quantiser parameters
+    # parser.add_argument('--embedding_dim', type=int, default=64, help='dimention of codebook (default: 64)')
+    # parser.add_argument('--num_embedding', type=int, default=512, help='number of codebook (default: 512)')
+    # parser.add_argument('--slice_num', type=int, default=0, help='number of slice (default: 0)')
+    # parser.add_argument('--distance', type=str, default='cos', help='distance for codevectors and features')
+    # parser.add_argument('--lora_codebook', action='store_true', help='using lora_codebook')
+    # parser.add_argument('--evq', action='store_true', help='using EfficientVectorQuantiser')
+    # parser.add_argument('--scale_grad_by_freq', action='store_true', help='using scale_grad_by_freq in the codebook embedding')
+    # parser.add_argument('--split_type', type=str, default='fixed', help='split methods (fixed, interval, random)')
 
-    # Miscellaneous
-    parser.add_argument('--output_folder', type=str, default='/scratch/shared/beegfs/cxzheng/normcode/final_vqvae/', help='name of the output folder (default: vqvae)')
-    parser.add_argument('--model_name', type=str, default='fashionmnist_probrandom_contramin1/best.pt', help='name of the output folder (default: vqvae)')
-    parser.add_argument('--num_workers', type=int, default=mp.cpu_count() - 1, help='number of workers for trajectories sampling (default: {0})'.format(mp.cpu_count() - 1))
-    parser.add_argument('--device', type=str, default='cuda', help='set the device (cpu or cuda, default: cpu)')
-    args = parser.parse_args()
+    # # Miscellaneous
+    # parser.add_argument('--output_folder', type=str, default='/scratch/shared/beegfs/cxzheng/normcode/final_vqvae/', help='name of the output folder (default: vqvae)')
+    # parser.add_argument('--model_name', type=str, default='fashionmnist_probrandom_contramin1/best.pt', help='name of the output folder (default: vqvae)')
+    # parser.add_argument('--num_workers', type=int, default=mp.cpu_count() - 1, help='number of workers for trajectories sampling (default: {0})'.format(mp.cpu_count() - 1))
+    # parser.add_argument('--device', type=str, default='cuda', help='set the device (cpu or cuda, default: cpu)')
+    # args = parser.parse_args()
 
-    main(args)
+
+    from config import load_config
+
+    cfg_all = load_config.load_cfg()
+
+
+    main(cfg_all)

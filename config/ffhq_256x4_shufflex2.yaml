@@ -1,0 +1,39 @@
+##### train
+exp_name: ffhq_256x4_shufflex2
+output_folder: ./output
+dataset: ffhq
+batch_size: 32
+num_epochs: 500       # number of epochs (default: 100)
+
+seed: 42              # seed for everything
+lr: 3e-4
+num_workers: 16
+
+# loss
+calc_sim_loss: Ture
+sim_loss: 2             # 权重为0,则表示不参与训练; 仅 calc_sim_loss=True & sim_loss > 0时参与训练
+commitment_cost: 0.25   # hyperparameter for the commitment loss (default: 0.25)
+
+# model
+# Latent space
+hidden_size: 128        # size of the latent vectors (default: 128)
+num_residual_hidden: 32 # size of the redisual layers (default: 32)
+num_residual_layers: 2  # number of residual layers (default: 2)
+
+# codebook
+# Quantiser parameters
+shuffle_scale: 2      # scale factor for upsample and downsample the feature vectors
+num_embedding: 256      # number of codebook (default: 512)
+dim_embedding: 4
+# size_dmbedding: num_embedding * dim_embedding
+
+distance: cos           # distance for codevectors and features
+split_type: fixed       # fixed, interval, random
+anchor: closest         # anchor sampling methods (random, closest, probrandom)
+
+##### eval
+num_test: 0  # how many examples to load for testing (default: 0 to test all samples)
+
+# server vislab 12
+data_folder: /data2/common/ffhq/images1024x1024
+ 

@@ -1,17 +1,21 @@
 import os, random
-import argparse
-import multiprocessing as mp
 import numpy as np
+import datetime
+# from omegaconf import OmegaConf
 
 import torch
 import torch.nn.functional as F
 from torchvision import transforms, datasets
 from torchvision.utils import  make_grid
-from tensorboardX import SummaryWriter
+
+import wandb
 from tqdm import tqdm
+# from tqdm.notebook import tqdm
 
+import torch.utils.data as data_utils
+from icecream import ic 
 from modules import Model
-
+from dataset import ffhq
 
 def seed_everything(seed: int):
     random.seed(seed)
@@ -29,65 +33,83 @@ def seed_worker(worker_id):
     random.seed(worker_seed)
 
 
-def train(data_loader, model, optimizer, args, writer, data_variance=1):
+def train(data_loader, model, optimizer, run_steps, data_variance=1):
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     """trianing the model"""
-    # for images, _ in tqdm(data_loader):
     for images, _ in data_loader:
-        images = images.to(args.device)
+        # ic('train->images.shape: ', images.shape)
+        images = images.to(device)
         optimizer.zero_grad()
         # x, loss_vq, perplexity, _ = model(images)
-        x, loss_vq, loss_sim, _, _ = model(images)
+        x, loss_vq_dict, _, _ = model(images)
+        loss_vq = loss_vq_dict.get('loss')
+        # ic('train->x.shape: ', x.shape)
 
         # loss function
         loss_recons = F.mse_loss(x, images) / data_variance
         loss = loss_recons + loss_vq
         loss.backward()
 
-        writer.add_scalar('loss/train/reconstruction', loss_recons.item(), args.steps)
-        writer.add_scalar('loss/train/quantization', loss_vq.item(), args.steps)
-        writer.add_scalar('loss/train/quantization_sim', loss_sim.item(), args.steps)
+        if Enable_Wandb:
+            wandb.log({
+                "loss_recons": loss_recons, 
+                "loss_vq": loss_vq,
+                "loss_sim": loss_vq_dict.get('sim_loss'), 
+                'sim_max': loss_vq_dict.get('sim_max'),
+                'sim_row_max_val': loss_vq_dict.get('sim_row_max_val'),
+                })
+
         # writer.add_scalar('loss/train/perplexity', perplexity.item(), args.steps)
 
         optimizer.step()
 
-        args.steps +=1
+        # args.steps +=1
+        run_steps += 1
+        # ic(run_steps)
 
 
-def test(data_loader, model, args, writer):
+def test(data_loader, model, run_steps):
     """evaluation model"""
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     with torch.no_grad():
         loss_recons, loss_vq = 0., 0.
         for images, _ in data_loader:
-            images = images.to(args.device)
-            x, loss, loss_sim, _, _ = model(images)
+            images = images.to(device)
+            x, loss_dict, _, _ = model(images)
             loss_recons += F.mse_loss(x, images)
-            loss_vq += loss
+            loss_vq += loss_dict.get('loss')
         loss_recons /= len(data_loader)
         loss_vq /= len(data_loader)
-    
-    # Logs
-    writer.add_scalar('loss/test/reconstruction', loss_recons.item(), args.steps)
-    writer.add_scalar('loss/test/quantization', loss_vq.item(), args.steps)
-    writer.add_scalar('loss/test/quantization_sim', loss_sim.item(), args.steps)
+    if Enable_Wandb:
+        wandb.log({"test_loss_reconstruction": loss_recons,
+                "test_loss_quantization": loss_vq,
+                #    "test_loss_sim": loss_dict.get('sim_loss'),
+                #    'test_sim_max': loss_dict.get('sim_max'),
+                #    'test_sim_row_max_val': loss_dict.get('sim_row_max_val'),
+                },
+                #    step = run_steps
+                )
 
     return loss_recons.item(), loss_vq.item()
 
 
 def generate_samples(images, model, args):
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     with torch.no_grad():
-        images = images.to(args.device)
-        x, _, _, _, _ = model(images)
+        images = images.to(device)
+        x, _, _, _ = model(images)
     return x
 
 
 def main(args):
-    writer = SummaryWriter(os.path.join(os.path.join(args.output_folder, 'logs'), args.exp_name))
+    # writer = SummaryWriter(os.path.join(os.path.join(args.output_folder, 'logs'), args.exp_name))
     save_filename = os.path.join(os.path.join(args.output_folder, 'models'), args.exp_name)
     seed_everything(args.seed)
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     # load dataset
     data_variance=1
-    if args.dataset in ['mnist', 'fashion-mnist', 'cifar10', 'celeba', 'imagenet']:
+    if args.dataset in ['mnist', 'fashion-mnist', 'cifar10', 'celeba', 'imagenet', 'ffhq']:
         transform = transforms.Compose([
             transforms.ToTensor(),
             transforms.Normalize((0.5), (0.5))
@@ -145,10 +167,36 @@ def main(args):
             transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225))
             ])
             train_dataset = datasets.ImageNet(args.data_folder,
-                split='train', download=False, transform=transform)
+                split='val', transform=transform)  # TODO: train
             test_dataset = datasets.ImageNet(args.data_folder,
-                split='val', download=False, transform=transform)
+                split='val', transform=transform)  # 50k
             num_channels = 3
+ 
+            train_dataset = data_utils.Subset(train_dataset, torch.arange(10000))  # 10k
+            test_dataset  = data_utils.Subset( test_dataset, torch.arange(1000))   #  1k
+
+            print("len(train_dataset)", len(train_dataset))
+            print("len(test_dataset)", len(test_dataset))
+
+        elif args.dataset == 'ffhq':
+            print("Loading ffhq")
+            transform = transforms.Compose([
+            transforms.Resize((256,256)),
+            transforms.ToTensor(),
+            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+            ])
+            train_dataset = ffhq.ImagesFolder(args.data_folder,
+                split='val', transform=transform)  # 60k TODO: train
+            test_dataset = ffhq.ImagesFolder(args.data_folder,
+                split='val', transform=transform)  # 10k
+            num_channels = 3
+ 
+            train_dataset = data_utils.Subset(train_dataset, torch.arange(1000))  # 1k
+            test_dataset  = data_utils.Subset( test_dataset, torch.arange(256))   
+
+            print("len(train_dataset)", len(train_dataset))
+            print("len(test_dataset)", len(test_dataset))
+        # thumbnails128x128
 
         valid_dataset = test_dataset
 
@@ -161,7 +209,7 @@ def main(args):
         num_workers=args.num_workers, pin_memory=True, 
         worker_init_fn=seed_worker, generator=g)
     valid_loader = torch.utils.data.DataLoader(valid_dataset,
-        batch_size=args.batch_size, shuffle=False, drop_last=True,
+        batch_size=args.batch_size, shuffle=False, drop_last=True, # 
         num_workers=args.num_workers, pin_memory=True,
         worker_init_fn=seed_worker, generator=g)
     test_loader = torch.utils.data.DataLoader(test_dataset,
@@ -171,31 +219,37 @@ def main(args):
     # Define the model
     print("Define the model")
     model = Model(num_channels, args.hidden_size, args.num_residual_layers, args.num_residual_hidden,
-                  args.num_embedding, args.embedding_dim, args.commitment_cost, args.distance,
-                  args.anchor, args.first_batch, args.contras_loss,
-                  lora_codebook=args.lora_codebook,  # TODO config 改为更加合适的名字， slice_codebook?
-                  evq=args.evq,
+                  args.num_embedding, args.dim_embedding, args.commitment_cost, args.distance,
+                  args.anchor, 
+                  first_batch = False,  #   args.first_batch, 
+                  contras_loss= False,  #   args.contras_loss,
+                  # lora_codebook=args.lora_codebook,  # TODO config 改为更加合适的名字， slice_codebook?
+                  # evq=args.evq,
                   split_type=args.split_type,
                   args=args,
-                  ).to(args.device)
+                  ).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
     # Update the model
     print("Update the model")
     best_loss = -1.
+    run_step = 0
     for epoch in tqdm(range(args.num_epochs)):
         # training and testing the model
         # print(f"Epoch: {epoch}")
-        train(train_loader, model, optimizer, args, writer, data_variance)
-        loss_rec, loss_vq = test(valid_loader, model, args, writer)
+        train(train_loader, model, optimizer, run_step, data_variance)
 
+        # TODO: 加速训练，可把这部分去掉
+        loss_rec, loss_vq = test(valid_loader, model, run_step)
+
+        # TODO: 加速训练，可把这部分去掉
         # visualization
-        images, _ = next(iter(test_loader))
-        rec_images = generate_samples(images, model, args)
-        input_grid = make_grid(images, nrow=8, range=(-1, 1), normalize=True)
-        rec_grid = make_grid(rec_images, nrow=8, range=(-1,1), normalize=True)
-        writer.add_image('original', input_grid, epoch + 1)
-        writer.add_image('reconstruction', rec_grid, epoch + 1)
+        # images, _ = next(iter(test_loader))
+        # rec_images = generate_samples(images, model, args)
+        # input_grid = make_grid(images, nrow=8, value_range=(-1, 1), normalize=True)  # range -> value_range
+        # rec_grid = make_grid(rec_images, nrow=8, value_range=(-1,1), normalize=True)
+        # writer.add_image('original', input_grid, epoch + 1)
+        # writer.add_image('reconstruction', rec_grid, epoch + 1)
 
         # save model
         if (epoch == 0) or (loss_rec < best_loss):
@@ -207,53 +261,52 @@ def main(args):
             with open('{0}/model_{1}.pt'.format(save_filename, epoch + 1), 'wb') as f:
                 torch.save(model.state_dict(), f)
 
+
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='CVQ-VAE')
-    # General
-    parser.add_argument('--data_folder', type=str, help='name of the data folder')
-    parser.add_argument('--dataset', type=str, help='name of the dataset (mnist, fashion-mnist, cifar10)')
-    parser.add_argument('--batch_size', type=int, default=1024, help='batch size (default: 1024)')
-    # Latent space
-    parser.add_argument('--hidden_size', type=int, default=128, help='size of the latent vectors (default: 128)')
-    parser.add_argument('--num_residual_hidden', type=int, default=32, help='size of the redisual layers (default: 32)')
-    parser.add_argument('--num_residual_layers', type=int, default=2, help='number of residual layers (default: 2)')
-    # Quantiser parameters
-    parser.add_argument('--embedding_dim', type=int, default=64, help='dimention of codebook (default: 64)')
-    parser.add_argument('--num_embedding', type=int, default=512, help='number of codebook (default: 512)')
-    parser.add_argument('--commitment_cost', type=float, default=0.25, help='hyperparameter for the commitment loss')
-    parser.add_argument('--distance', type=str, default='cos', help='distance for codevectors and features')
-    parser.add_argument('--anchor', type=str, default='closest', help='anchor sampling methods (random, closest, probrandom)')
-    parser.add_argument('--split_type', type=str, default='fixed', help='split methods (fixed, interval, random)')
-    parser.add_argument('--first_batch', action='store_true', help='offline version with only one time reinitialisation')
-    parser.add_argument('--contras_loss', action='store_true', help='using contrastive loss')
-    parser.add_argument('--lora_codebook', action='store_true', help='using lora_codebook')
-    parser.add_argument('--evq', action='store_true', help='using EfficientVectorQuantiser')
-    parser.add_argument('--scale_grad_by_freq', action='store_true', help='using scale_grad_by_freq in the codebook embedding')
-    
-    # Optimization
-    parser.add_argument('--seed', type=int, default=42, help="seed for everything")
-    parser.add_argument('--num_epochs', type=int, default=500, help='number of epochs (default: 100)')
-    parser.add_argument('--lr', type=float, default=3e-4, help='learning rate for Adam optimizer (default: 2e-4)')
-    # Miscellaneous
-    parser.add_argument('--output_folder', type=str, default='./', help='name of the output folder (default: vqvae)')
-    parser.add_argument('--exp_name', type=str, default='vqvae', help='name of the output folder (default: vqvae)')
-    parser.add_argument('--num_workers', type=int, default=mp.cpu_count() - 1, help='number of workers for trajectories sampling (default: {0})'.format(mp.cpu_count() - 1))
-    parser.add_argument('--device', type=str, default='cpu', help='set the device (cpu or cuda, default: cpu)')
+    time_start=datetime.datetime.now()
 
-    args = parser.parse_args()
-    print("num_workers =", args.num_workers)
+    from config import load_config
 
-    if not os.path.exists(os.path.join(args.output_folder, 'logs')):
-        os.makedirs(os.path.join(args.output_folder, 'logs'))
-    if not os.path.exists(os.path.join(args.output_folder, 'models')):
-        os.makedirs(os.path.join(args.output_folder, 'models'))
+    cfg_all = load_config.load_cfg()
+
+    if not os.path.exists(os.path.join(cfg_all.output_folder, 'logs')):
+        os.makedirs(os.path.join(cfg_all.output_folder, 'logs'))
+    if not os.path.exists(os.path.join(cfg_all.output_folder, 'models')):
+        os.makedirs(os.path.join(cfg_all.output_folder, 'models'))
+    if not os.path.exists(os.path.join(cfg_all.output_folder, 'models', cfg_all.exp_name)):
+        os.makedirs(os.path.join(cfg_all.output_folder, 'models', cfg_all.exp_name))
     # Device
-    args.device = torch.device(args.device if torch.cuda.is_available() else 'cpu')
+    # cfg_all.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     # Slurm
-    if 'SLURM_JOB_ID' in os.environ:
-        args.exp_name += '-{0}'.format(os.environ['SLURM_JOB_ID'])
-    if not os.path.exists(os.path.join(os.path.join(args.output_folder, 'models'), args.exp_name)):
-        os.makedirs(os.path.join(os.path.join(args.output_folder, 'models'), args.exp_name))
-    args.steps = 0
+    # if 'SLURM_JOB_ID' in os.environ:
+    #     args.exp_name += '-{0}'.format(os.environ['SLURM_JOB_ID'])
+    # if not os.path.exists(os.path.join(os.path.join(args.output_folder, 'models'), args.exp_name)):
+    #     os.makedirs(os.path.join(os.path.join(args.output_folder, 'models'), args.exp_name))
+    
+    Enable_Wandb = cfg_all.get('Enable_Wandb', True)
+    # Enable_Wandb = False  # debug
+    if Enable_Wandb:
+        # start a new wandb run to track this script
+        wandb.init(
+            # set the wandb project where this run will be logged
+            project=f"proj_EfficientCodebook_{cfg_all.get('dataset')}",
+            name=cfg_all.get('exp_name'),  # display name for this run
 
-    main(args)
+            # track hyperparameters and run metadata
+            config=dict(cfg_all)
+            # config={
+            # "learning_rate": 0.02,
+            # "architecture": "CNN",
+            # "dataset": "CIFAR-100",
+            # "epochs": 10,
+            # }
+        )
+
+    print("# " * 20)
+
+    main(cfg_all)
+    if Enable_Wandb:
+        wandb.finish()
+
+    time_end=datetime.datetime.now()
+    print('Running time: %s'%(time_end - time_start))

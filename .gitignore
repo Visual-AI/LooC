@@ -10,4 +10,9 @@ output*/
 
 debug/
 
+scripts/*.sh
+
+wandb
+wandb/
+
 
