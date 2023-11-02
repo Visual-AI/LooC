@@ -128,7 +128,7 @@ def get_sh(cfg, exp_name):
         fw.write(line)  # 将字符串写入文件中
         fw.write("\n")  # 换行
     fw.close()
-    print('sh_filename =', sh_filename)
+    print('sh', sh_filename)
 
     
 def main_exp_mnist():
@@ -193,11 +193,11 @@ def main_exp_mnist():
 def main_exp_cifar10():
     flag_debug = False # True
     cfg = dict()
-    gpu_list = [5, 6, 7, 5, 6]
+    gpu_list = [6, 7, 6, 7, 5]
     dataset_name = 'cifar10'
     cfg.update({"exp_tag": 'findnum'})
     cfg.update({"output_folder": 'exps/exp_findnum'})
-    cfg.update({"shuffle_scale": 2})
+    cfg.update({"shuffle_scale": 0})
     cfg.update({"batch_size": 512})
     embedding_num_dim = [
         (64, 4),
@@ -391,5 +391,5 @@ if __name__ == '__main__':
     # main_exp_imagenet()
     # main_exp_ffhq()
 
-    main_exp_mnist()
-    # main_exp_cifar10()
+    # main_exp_mnist()
+    main_exp_cifar10()
