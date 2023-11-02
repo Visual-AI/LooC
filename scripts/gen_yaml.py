@@ -1,6 +1,17 @@
+import os
 
 
-def get_yaml(cfg):
+vislab12_datapath = {
+    'mnist': '/data2/common/mnist',
+}
+
+vislab13_datapath = {
+    'mnist': '/home2/jieli/datasets/mnist',
+    'fashion-mnist': '/home2/jieli/datasets/fashion-mnist',
+}
+
+
+def get_yaml(cfg, flag_debug=False):
     # output_folder = f"./output_lora_codebook_{cfg['embedding_num']}x{cfg['embedding_dim']}"
     # output_folder = f"./output"
     # str_evq = '_evq' if cfg['evq'] else ''
@@ -10,13 +21,13 @@ def get_yaml(cfg):
     str_list = []
     print('#'*10, list(cfg.keys()))
 
-    exp_name = f"{cfg.get('dataset')}_{cfg.get('embedding_num')}x{cfg.get('embedding_dim')}_{cfg.get('exp_tag')}"
-
+    exp_name = f"{cfg.get('dataset')}_{cfg.get('embedding_num')}x{cfg.get('embedding_dim')}x{cfg.get('shuffle_scale')}_{cfg.get('exp_tag')}"
 
     ##### train
+    str_list.append("Enable_Wandb: False   # for debug" if flag_debug else "")
     str_list.append("##### train")
     str_list.append(f"exp_name: {exp_name}")
-    str_list.append(f"output_folder: ./output")
+    str_list.append(f"output_folder: {cfg.get('output_folder')}")
     str_list.append(f"dataset: {cfg.get('dataset')}")
     str_list.append(f"batch_size: {cfg.get('batch_size')}")
     str_list.append(f"num_epochs: 500       # number of epochs (default: 100)")
@@ -29,7 +40,7 @@ def get_yaml(cfg):
     str_list.append("")
     str_list.append(f"# loss")
     str_list.append(f"calc_sim_loss: Ture")
-    str_list.append(f"sim_loss: 2             # 权重为0,则表示不参与训练; 仅 calc_sim_loss=True & sim_loss > 0时参与训练")
+    str_list.append(f"sim_loss: 0             # 权重为0,则表示不参与训练; 仅 calc_sim_loss=True & sim_loss > 0时参与训练")
     str_list.append(f"commitment_cost: 0.25   # hyperparameter for the commitment loss (default: 0.25)")
     
     str_list.append("")
@@ -80,11 +91,11 @@ def get_sh(cfg, exp_name):
     sh_list.append(f"expname={exp_name}")
     sh_list.append("")
     sh_list.append("##### train") # gpu_id
-    sh_list.append(f"CUDA_VISIBLE_DEVICES={cfg.get('gpu_id')}" + " python main.py --cfg ./config/${expname}.yaml 2>&1 | tee ./.logs/${expname}_train.log")
+    sh_list.append(f"CUDA_VISIBLE_DEVICES={cfg.get('gpu_id')}" + " python main.py --cfg ./config/${expname}.yaml 2>&1 | tee " + f"./{cfg.get('output_folder')}/" + "${expname}_train.log")
     sh_list.append("##### test")
-    sh_list.append(f"CUDA_VISIBLE_DEVICES={cfg.get('gpu_id')}" + " python test.py --cfg ./config/${expname}.yaml 2>&1 | tee ./.logs/${expname}_test.log")
+    sh_list.append(f"CUDA_VISIBLE_DEVICES={cfg.get('gpu_id')}" + " python test.py --cfg ./config/${expname}.yaml 2>&1 | tee " + f"./{cfg.get('output_folder')}/" + "${expname}_test.log")
     sh_list.append("##### eval")
-    sh_list.append(f"CUDA_VISIBLE_DEVICES={cfg.get('gpu_id')}" + " python evaluation.py --cfg ./config/${expname}.yaml 2>&1 | tee ./.logs/${expname}_eval.log")
+    sh_list.append(f"CUDA_VISIBLE_DEVICES={cfg.get('gpu_id')}" + " python evaluation.py --cfg ./config/${expname}.yaml 2>&1 | tee " + f"./{cfg.get('output_folder')}/" + "${expname}_eval.log")
 
     # -----
     sh_filename = f"scripts/run_{exp_name}.sh"
@@ -94,6 +105,55 @@ def get_sh(cfg, exp_name):
         fw.write("\n")  # 换行
     fw.close()
     print('sh_filename =', sh_filename)
+
+
+def get_datapath(dataset_name):
+    dataset_path = vislab12_datapath.get(dataset_name)
+    if os.path.exists(dataset_path):
+        return dataset_path
+    
+    dataset_path = vislab13_datapath.get(dataset_name)
+    if os.path.exists(dataset_path):
+        return dataset_path
+    
+
+def main_exp_mnist():
+    flag_debug = False # True
+    cfg = dict()
+    gpu_id = 1
+    dataset_name = 'mnist'
+    cfg.update({"exp_tag": 'findnum'})
+    cfg.update({"output_folder": 'exps/exp_findnum'})
+    cfg.update({"shuffle_scale": 2})
+    cfg.update({"batch_size": 512})
+    embedding_num_dim = [
+        (64, 4),
+        (128, 4),
+        (256, 4),
+        (512, 4),
+        (1024, 4),
+    ]
+
+    output_folder = cfg.get('output_folder')
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder, exist_ok=False)
+
+    
+    # --- default setting
+    cfg.update({
+        "distance": 'cos',              # distance, 默认为'cos'
+        "anchor": 'closest',            # sample 策略, 默认为'closest'
+        "split_type": 'fixed',          # split type: fixed, interval, random
+        "dataset": dataset_name,
+        "data_folder": get_datapath(dataset_name),
+        })
+    # -----
+    for n, d in embedding_num_dim:
+        cfg.update({"gpu_id": gpu_id})
+        cfg.update({"embedding_num":n, "embedding_dim":d})
+        exp_name = get_yaml(cfg, flag_debug)
+        get_sh(cfg, exp_name)
+        gpu_id += 1
 
 
 def main_exp_fashion_mnist():
@@ -250,7 +310,9 @@ def main_exp_ffhq():
 
         gpu_id += 1
 
+
 if __name__ == '__main__':
     # main_exp_fashion_mnist()
     # main_exp_imagenet()
-    main_exp_ffhq()
+    # main_exp_ffhq()
+    main_exp_mnist()
