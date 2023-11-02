@@ -214,8 +214,8 @@ def main_exp_cifar10():
     
     # --- default setting
     cfg.update({
-        "distance": 'random',              # distance, 默认为'cos'
-        "anchor": 'closest',            # sample 策略, 默认为'closest'
+        "distance": 'cos',              # distance, 默认为'cos'
+        "anchor": 'random',            # sample 策略, 默认为'closest', random
         "split_type": 'fixed',          # split type: fixed, interval, random
         "dataset": dataset_name,
         "data_folder": get_datapath(dataset_name),
