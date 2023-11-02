@@ -29,6 +29,9 @@ args = cfg_all
 args.gt_path = os.path.join(cfg_all.output_folder, 'results', cfg_all.exp_name, 'original')
 args.g_path = os.path.join(cfg_all.output_folder, 'results', cfg_all.exp_name, 'rec')
 
+# args.gt_path = '/home/jieli/proj/VAE/exps/exp_1101/output/results/mnist_cos_closest_8192x4/best.pt/original'
+# args.g_path = '/home/jieli/proj/VAE/exps/exp_1101/output/results/mnist_cos_closest_8192x4/best.pt/rec'
+
 print('args.gt_path', args.gt_path)
 print('args.g_path', args.g_path)
 
@@ -81,6 +84,7 @@ if __name__ == '__main__':
     psnrs = []
     lpipses = []
 
+    args.num_test = args.get("num_test", 0)  # set default 
     size = args.num_test if args.num_test > 0 else gt_size
 
     for i in tqdm(range(size)):
