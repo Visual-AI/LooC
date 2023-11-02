@@ -3,10 +3,12 @@ import os
 
 vislab12_datapath = {
     'mnist': '/data2/common/mnist',
+    'cifar10': '/data2/common/cifar',
 }
 
 vislab13_datapath = {
     'mnist': '/home2/jieli/datasets/mnist',
+    'cifar10': '/home2/jieli/datasets/cifar10',
     'fashion-mnist': '/home2/jieli/datasets/fashion-mnist',
 }
 
@@ -154,6 +156,47 @@ def main_exp_mnist():
         exp_name = get_yaml(cfg, flag_debug)
         get_sh(cfg, exp_name)
         gpu_id += 1
+
+
+def main_exp_cifar10():
+    flag_debug = False # True
+    cfg = dict()
+    gpu_list = [5, 6, 7, 5, 6]
+    dataset_name = 'cifar10'
+    cfg.update({"exp_tag": 'findnum'})
+    cfg.update({"output_folder": 'exps/exp_findnum'})
+    cfg.update({"shuffle_scale": 2})
+    cfg.update({"batch_size": 512})
+    embedding_num_dim = [
+        (64, 4),
+        (128, 4),
+        (256, 4),
+        (512, 4),
+        (1024, 4),
+    ]
+
+    output_folder = cfg.get('output_folder')
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder, exist_ok=False)
+
+    
+    # --- default setting
+    cfg.update({
+        "distance": 'cos',              # distance, 默认为'cos'
+        "anchor": 'closest',            # sample 策略, 默认为'closest'
+        "split_type": 'fixed',          # split type: fixed, interval, random
+        "dataset": dataset_name,
+        "data_folder": get_datapath(dataset_name),
+        })
+    # -----
+    cnt = 0
+    for n, d in embedding_num_dim:
+        gpu_id = gpu_list[cnt]
+        cfg.update({"gpu_id": gpu_id})
+        cfg.update({"embedding_num":n, "embedding_dim":d})
+        exp_name = get_yaml(cfg, flag_debug)
+        get_sh(cfg, exp_name)
+        cnt += 1
 
 
 def main_exp_fashion_mnist():
@@ -315,4 +358,6 @@ if __name__ == '__main__':
     # main_exp_fashion_mnist()
     # main_exp_imagenet()
     # main_exp_ffhq()
-    main_exp_mnist()
+
+    # main_exp_mnist()
+    main_exp_cifar10()
