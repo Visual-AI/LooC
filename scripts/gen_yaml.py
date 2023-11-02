@@ -204,24 +204,25 @@ def main_exp_ffhq():
     embedding_num_dim = [
         # (256, 2),
         # (512, 2),
-        ( 64, 4),
+        # ( 64, 4),
         (128, 4),
-        (256, 4),
+        # (256, 4),
         # (512, 4),
 
-        (128, 8),
+        # (128, 8),
 
-        (256, 8),
+        # (256, 8),
         # (512, 8),
     ]
 
 
     # --- default setting
+    shuffle_scale = 0
     cfg.update({
         "distance": 'cos',              # distance, 默认为'cos'
         "anchor": 'closest',            # sample 策略, 默认为'closest'
         "split_type": 'fixed',          # split type: fixed, interval, random
-        "shuffle_scale": 2,
+        "shuffle_scale": shuffle_scale,
 
         # --- dataset Vislab 12
         "dataset": 'ffhq',
@@ -230,9 +231,9 @@ def main_exp_ffhq():
 
         })
     
-    cfg.update({"exp_tag": 'shufflex2'})
+    cfg.update({"exp_tag": f'shufflex{shuffle_scale}'})
 
-    gpu_id = 1
+    gpu_id = 6
 
     # ---------
     # cfg.update({"gpu_id": gpu_id})
