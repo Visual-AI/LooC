@@ -167,12 +167,15 @@ class EfficientVectorQuantiser(nn.Module):
             feature_dim = z.shape[-1]
             slice_num = feature_dim // embed_dim
             
-            if embed_num * slice_num >= 2048 * 64:  
+            if False and embed_num * slice_num >= 2048 * 64:  
                 # -- slice num 较大或codebook较长时，分段计算距离（相似度），取相似度最高的index  
                 # -- 将中间变量“相似度矩阵”给丢掉，能够减少显存消耗，但是不能减少计算量
                 # dist_list= []
                 _tmp_n = slice_num
                 encoding_indices_list = []
+                encoding_indices_list_dim0 = []
+                values_list = []
+                indices_list= []
                 normed_z_flattened = normed_z_flattened.view(-1, _tmp_n, embed_dim)  # [bs * h * w, slice_num, embed_dim]  # _tmp_n = slice_num
 
                 for i in range(_tmp_n):
@@ -181,11 +184,37 @@ class EfficientVectorQuantiser(nn.Module):
                     encoding_indices_i = torch.argmax(dist_i, dim=1)
                     encoding_indices_list.append(encoding_indices_i)
 
-                encoding_indices = torch.cat(encoding_indices_list)
+                    # encoding_indices_i_dim0 = torch.argmax(dist_i, dim=0)
+                    # encoding_indices_list_dim0.append(encoding_indices_i_dim0)
+
+                    values, indices = torch.max(dist_i, dim=0, keepdim=False, out=None)  # shape = num of codebook
+                    ic(values.shape, indices.shape)
+                    values_list.append(values)
+                    indices_list.append(indices)
+                    
+
+                indices_tensor = torch.stack(indices_list, dim=1)
+                values_tensor = torch.stack(values_list, dim=1)
+                ic(len(values_list))
+                ic(values_tensor.shape, indices_tensor.shape)
+                values_idx = torch.argmax(values_tensor, dim=0)
+                ic(values_idx.shape)
+                # torch.take(input, index)->Tensor
+                # encoding_indices_dim0 = torch.take(indices_tensor, values_idx)
+                # torch.gather(input, dim, index, out=None)
+                # encoding_indices_dim0 = torch.gather(indices_tensor, dim=0, index=values_idx, out=None)
+                # torch.index_select(input, dim, index, out=None)
+                encoding_indices_dim0 = torch.index_select(indices_tensor, 1, values_idx, out=None)
+
+                ic(encoding_indices_dim0.shape)
+
+                
             else:
                 dist = torch.einsum('bd,dn->bn', normed_z_flattened, rearrange(normed_codebook, 'n d -> d n'))  # [bs * h * w * slice_num, num_embed], # [1024*8*8*16=1048576, 4096]  # num_embed=4096, embed_dim=8, 300M
                 encoding_indices = torch.argmax(dist, dim=1)
-
+                encoding_indices_dim0 = torch.argmax(dist, dim=0)
+        # ic("self.distance = ", self.distance)
+        # ic(encoding_indices.shape, encoding_indices_dim0.shape)
         # TODO 改进dist
 
         # import pdb
@@ -273,7 +302,7 @@ class EfficientVectorQuantiser(nn.Module):
                 # closest sampling
                 # 取最接近codebook的self.num_embed个flattened feature vector 
                 if self.anchor == 'closest':
-                    encoding_indices_dim0 = torch.argmax(dist, dim=0)
+                    # encoding_indices_dim0 = torch.argmax(dist, dim=0)
                     # sort_distance, indices = dist.sort(dim=0)
                     # random_feat = z_flattened.detach()[indices[-1,:]]
                     random_feat = z_flattened.detach()[encoding_indices_dim0]
