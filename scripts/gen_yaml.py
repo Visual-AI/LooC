@@ -1,6 +1,12 @@
 import os
 
 
+
+vislab3_datapath = {
+    'mnist': '/disk2/jieli/datasets/mnist',
+    'cifar10': '/disk2/jieli/datasets/cifar',
+}
+
 vislab12_datapath = {
     'mnist': '/data2/common/mnist',
     'cifar10': '/data2/common/cifar',
@@ -15,6 +21,10 @@ vislab13_datapath = {
 
 
 def get_datapath(dataset_name):
+    dataset_path = vislab3_datapath.get(dataset_name)
+    if os.path.exists(dataset_path):
+        return dataset_path
+    
     dataset_path = vislab12_datapath.get(dataset_name)
     if os.path.exists(dataset_path):
         return dataset_path
@@ -124,7 +134,7 @@ def get_sh(cfg, exp_name):
 def main_exp_mnist():
     flag_debug = False  # True for debug
     cfg = dict()
-
+    gpu_list = [0, 0, 0]
     dataset_name = 'mnist'
     cfg.update({"exp_tag": 'findnum'})
     cfg.update({"output_folder": 'exps/exp_findnum'})
@@ -132,11 +142,11 @@ def main_exp_mnist():
     cfg.update({"batch_size": 512})
     embedding_num_dim = [
         (16, 4),
-        (24, 4),
-        (32, 4),
+        # (24, 4),
+        # (32, 4),
         # (64, 4),
         # (128, 4),
-        # (256, 4),
+        (256, 4),
         # (512, 4),
         # (1024, 4),
     ]
@@ -155,7 +165,6 @@ def main_exp_mnist():
         "data_folder": get_datapath(dataset_name),
         })
     # -----
-    gpu_list = [1, 2, 3, 5, 6, 7]
     cnt = 0
     for n, d in embedding_num_dim:
         gpu_id = gpu_list[cnt]
@@ -367,5 +376,5 @@ if __name__ == '__main__':
     # main_exp_imagenet()
     # main_exp_ffhq()
 
-    # main_exp_mnist()
-    main_exp_cifar10()
+    main_exp_mnist()
+    # main_exp_cifar10()
