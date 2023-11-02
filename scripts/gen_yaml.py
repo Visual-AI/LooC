@@ -191,20 +191,20 @@ def main_exp_mnist():
 
 
 def main_exp_cifar10():
-    flag_debug = False # True
+    flag_debug = True  # True for debug, False for exp
     cfg = dict()
-    gpu_list = [6, 7, 6, 7, 5]
+    gpu_list = [0]
     dataset_name = 'cifar10'
-    cfg.update({"exp_tag": 'findnum'})
-    cfg.update({"output_folder": 'exps/exp_findnum'})
+    cfg.update({"exp_tag": 'randomsample'})
+    cfg.update({"output_folder": 'exps/exp_randomsample'})
     cfg.update({"shuffle_scale": 0})
     cfg.update({"batch_size": 512})
     embedding_num_dim = [
-        (64, 4),
-        (128, 4),
+        # (64, 4),
+        # (128, 4),
         (256, 4),
-        (512, 4),
-        (1024, 4),
+        # (512, 4),
+        # (1024, 4),
     ]
 
     output_folder = cfg.get('output_folder')
@@ -214,7 +214,7 @@ def main_exp_cifar10():
     
     # --- default setting
     cfg.update({
-        "distance": 'cos',              # distance, 默认为'cos'
+        "distance": 'random',              # distance, 默认为'cos'
         "anchor": 'closest',            # sample 策略, 默认为'closest'
         "split_type": 'fixed',          # split type: fixed, interval, random
         "dataset": dataset_name,
