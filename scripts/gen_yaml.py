@@ -8,9 +8,22 @@ vislab12_datapath = {
 
 vislab13_datapath = {
     'mnist': '/home2/jieli/datasets/mnist',
-    'cifar10': '/home2/jieli/datasets/cifar10',
+    'cifar10': '/home2/jieli/datasets/cifar',
     'fashion-mnist': '/home2/jieli/datasets/fashion-mnist',
 }
+
+
+
+def get_datapath(dataset_name):
+    dataset_path = vislab12_datapath.get(dataset_name)
+    if os.path.exists(dataset_path):
+        return dataset_path
+    
+    dataset_path = vislab13_datapath.get(dataset_name)
+    if os.path.exists(dataset_path):
+        return dataset_path
+    
+    print("# - "* 10, "check the datapath")
 
 
 def get_yaml(cfg, flag_debug=False):
@@ -70,7 +83,6 @@ def get_yaml(cfg, flag_debug=False):
     str_list.append(f"num_test: 0  # how many examples to load for testing (default: 0 to test all samples)")
 
     str_list.append("")
-    str_list.append(f"# server vislab 12")
     str_list.append(f"data_folder: {cfg.get('data_folder')}")
 
     str_list.append(" ")
@@ -108,17 +120,7 @@ def get_sh(cfg, exp_name):
     fw.close()
     print('sh_filename =', sh_filename)
 
-
-def get_datapath(dataset_name):
-    dataset_path = vislab12_datapath.get(dataset_name)
-    if os.path.exists(dataset_path):
-        return dataset_path
     
-    dataset_path = vislab13_datapath.get(dataset_name)
-    if os.path.exists(dataset_path):
-        return dataset_path
-    
-
 def main_exp_mnist():
     flag_debug = False  # True for debug
     cfg = dict()
