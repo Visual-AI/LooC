@@ -1,23 +1,23 @@
 import os
 
 
-
 vislab3_datapath = {
-    'mnist': '/disk2/jieli/datasets/mnist',
-    'cifar10': '/disk2/jieli/datasets/cifar',
+    'mnist':            '/disk2/jieli/datasets/mnist',
+    'cifar10':          '/disk2/jieli/datasets/cifar',
+    'fashion-mnist':    '/disk2/jieli/datasets/fashion-mnist',
 }
 
 vislab12_datapath = {
-    'mnist': '/data2/common/mnist',
-    'cifar10': '/data2/common/cifar',
+    'mnist':            '/data2/common/mnist',
+    'cifar10':          '/data2/common/cifar',
+    'fashion-mnist':    '/data2/common/fashion-mnist',
 }
 
 vislab13_datapath = {
-    'mnist': '/home2/jieli/datasets/mnist',
-    'cifar10': '/home2/jieli/datasets/cifar',
-    'fashion-mnist': '/home2/jieli/datasets/fashion-mnist',
+    'mnist':            '/home2/jieli/datasets/mnist',
+    'cifar10':          '/home2/jieli/datasets/cifar',
+    'fashion-mnist':    '/home2/jieli/datasets/fashion-mnist',
 }
-
 
 
 def get_datapath(dataset_name):
@@ -49,7 +49,7 @@ def get_yaml(cfg, flag_debug=False):
     exp_name = f"{cfg.get('dataset')}_{cfg.get('embedding_num')}x{cfg.get('embedding_dim')}x{cfg.get('shuffle_scale')}_{cfg.get('exp_tag')}"
 
     ##### train
-    str_list.append("Enable_Wandb: False   # for debug" if flag_debug else "")
+    str_list.append("Enable_Wandb: False   # for debug" if flag_debug else "Enable_Wandb: True   # default: True")
     str_list.append("##### train")
     str_list.append(f"exp_name: {exp_name}")
     str_list.append(f"output_folder: {cfg.get('output_folder')}")
@@ -232,6 +232,47 @@ def main_exp_cifar10():
 
 
 def main_exp_fashion_mnist():
+    flag_debug = False  # True for debug
+    cfg = dict()
+    gpu_list = [0, 1, 2, 3, 7]
+    dataset_name = 'fashion-mnist'
+    cfg.update({"exp_tag": 'findnum'})
+    cfg.update({"output_folder": 'exps/exp_findnum'})
+    cfg.update({"shuffle_scale": 0})
+    cfg.update({"batch_size": 512})
+    embedding_num_dim = [
+        (64, 4),
+        (128, 4),
+        (256, 4),
+        (512, 4),
+        (1024, 4),
+    ]
+
+    output_folder = cfg.get('output_folder')
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder, exist_ok=False)
+
+    
+    # --- default setting
+    cfg.update({
+        "distance": 'cos',              # distance, 默认为'cos'
+        "anchor": 'closest',            # sample 策略, 默认为'closest'
+        "split_type": 'fixed',          # split type: fixed, interval, random
+        "dataset": dataset_name,
+        "data_folder": get_datapath(dataset_name),
+        })
+    # -----
+    cnt = 0
+    for n, d in embedding_num_dim:
+        gpu_id = gpu_list[cnt]
+        cfg.update({"gpu_id": gpu_id})
+        cfg.update({"embedding_num":n, "embedding_dim":d})
+        exp_name = get_yaml(cfg, flag_debug)
+        get_sh(cfg, exp_name)
+        cnt += 1
+
+
+def main_exp_fashion_mnist_del():
     embedding_num_dim = [
         (128, 8),
         (256, 8),
@@ -387,9 +428,9 @@ def main_exp_ffhq():
 
 
 if __name__ == '__main__':
-    # main_exp_fashion_mnist()
     # main_exp_imagenet()
     # main_exp_ffhq()
 
     # main_exp_mnist()
-    main_exp_cifar10()
+    # main_exp_cifar10()
+    main_exp_fashion_mnist()
