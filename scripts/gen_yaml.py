@@ -134,12 +134,27 @@ def get_sh(cfg, exp_name):
 def main_exp_mnist():
     flag_debug = False  # True for debug
     cfg = dict()
-    gpu_list = [0, 0, 0]
+    gpu_list = [0, 1, 2, 3, 0, 1]
     dataset_name = 'mnist'
-    cfg.update({"exp_tag": 'findnum'})
-    cfg.update({"output_folder": 'exps/exp_findnum'})
     cfg.update({"shuffle_scale": 2})  # 
     cfg.update({"batch_size": 512})
+
+    # exp -- finddim
+    cfg.update({"exp_tag": 'finddim'})
+    cfg.update({"output_folder": 'exps/exp_finddim'})
+    embedding_num_dim = [
+        (256,   4),
+        (256,   8),
+        (256,  16),
+        (256,  32),
+        (256,  64),
+        (256, 128),
+    ]
+
+    # exp -- findnum
+    """
+    cfg.update({"exp_tag": 'findnum'})
+    cfg.update({"output_folder": 'exps/exp_findnum'})
     embedding_num_dim = [
         (16, 4),
         # (24, 4),
@@ -149,7 +164,7 @@ def main_exp_mnist():
         (256, 4),
         # (512, 4),
         # (1024, 4),
-    ]
+    ]"""
 
     output_folder = cfg.get('output_folder')
     if not os.path.exists(output_folder):
