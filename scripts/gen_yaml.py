@@ -118,20 +118,23 @@ def get_datapath(dataset_name):
     
 
 def main_exp_mnist():
-    flag_debug = False # True
+    flag_debug = False  # True for debug
     cfg = dict()
-    gpu_id = 1
+
     dataset_name = 'mnist'
     cfg.update({"exp_tag": 'findnum'})
     cfg.update({"output_folder": 'exps/exp_findnum'})
-    cfg.update({"shuffle_scale": 2})
+    cfg.update({"shuffle_scale": 2})  # 
     cfg.update({"batch_size": 512})
     embedding_num_dim = [
-        (64, 4),
-        (128, 4),
-        (256, 4),
-        (512, 4),
-        (1024, 4),
+        (16, 4),
+        (24, 4),
+        (32, 4),
+        # (64, 4),
+        # (128, 4),
+        # (256, 4),
+        # (512, 4),
+        # (1024, 4),
     ]
 
     output_folder = cfg.get('output_folder')
@@ -148,12 +151,15 @@ def main_exp_mnist():
         "data_folder": get_datapath(dataset_name),
         })
     # -----
+    gpu_list = [1, 2, 3, 5, 6, 7]
+    cnt = 0
     for n, d in embedding_num_dim:
+        gpu_id = gpu_list[cnt]
         cfg.update({"gpu_id": gpu_id})
         cfg.update({"embedding_num":n, "embedding_dim":d})
         exp_name = get_yaml(cfg, flag_debug)
         get_sh(cfg, exp_name)
-        gpu_id += 1
+        cnt += 1
 
 
 def main_exp_fashion_mnist():
