@@ -128,27 +128,31 @@ def get_sh(cfg, exp_name):
         fw.write(line)  # 将字符串写入文件中
         fw.write("\n")  # 换行
     fw.close()
-    print('sh', sh_filename)
+    sh_str = f"sh {sh_filename}"
+    print(sh_str)
+    return sh_str
 
     
-def main_exp_mnist():
+def main_exp_mnist(merge_sh=False):
     flag_debug = False  # True for debug
     cfg = dict()
-    gpu_list = [0, 1, 2, 3, 0, 1]
+    gpu_list = [3, 1, 2, 0, 6, 6]
     dataset_name = 'mnist'
-    cfg.update({"shuffle_scale": 2})  # 
+    cfg.update({"shuffle_scale": 0})  # 
     cfg.update({"batch_size": 512})
 
     # exp -- finddim
     cfg.update({"exp_tag": 'finddim'})
     cfg.update({"output_folder": 'exps/exp_finddim'})
+    num = 256
+    # num = 128
     embedding_num_dim = [
-        (256,   4),
-        (256,   8),
-        (256,  16),
-        (256,  32),
-        (256,  64),
-        (256, 128),
+        (num,   4),
+        (num,   8),
+        (num,  16),
+        (num,  32),
+        (num,  64),
+        (num, 128),
     ]
 
     # exp -- findnum
@@ -181,13 +185,32 @@ def main_exp_mnist():
         })
     # -----
     cnt = 0
+    sh_str_list = []
     for n, d in embedding_num_dim:
-        gpu_id = gpu_list[cnt]
+        gpu_id = gpu_list[0] if merge_sh else gpu_list[cnt]
         cfg.update({"gpu_id": gpu_id})
         cfg.update({"embedding_num":n, "embedding_dim":d})
         exp_name = get_yaml(cfg, flag_debug)
-        get_sh(cfg, exp_name)
+        sh_str_i = get_sh(cfg, exp_name)
+        sh_str_list.append(sh_str_i)
         cnt += 1
+
+    if merge_sh:
+        msh_filename = f"scripts/run_{cfg.get('dataset')}_{cfg.get('exp_tag')}"
+        ss = cfg.get('shuffle_scale')
+
+        msh_filename += "_["
+        for n, d in embedding_num_dim:
+            msh_filename += f"{n}x{d}_"
+        msh_filename = msh_filename[:-1] + f"]x{ss}.sh"
+        fw = open(msh_filename,'w')
+        for line in sh_str_list: 
+            fw.write(line)  # 将字符串写入文件中
+            fw.write("\n")  # 换行
+            fw.write("\n")  # 换行
+        fw.close()
+        msh_str = f"sh {msh_filename}"
+        print(msh_str)
 
 
 def main_exp_cifar10():
@@ -431,6 +454,6 @@ if __name__ == '__main__':
     # main_exp_imagenet()
     # main_exp_ffhq()
 
-    # main_exp_mnist()
+    main_exp_mnist(merge_sh=True)
     # main_exp_cifar10()
-    main_exp_fashion_mnist()
+    # main_exp_fashion_mnist()
