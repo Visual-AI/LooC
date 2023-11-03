@@ -1,9 +1,9 @@
 import os
 
 vislab3_datapath = {
-    'mnist':            '/disk2/jieli/datasets--/mnist',
-    'cifar10':          '/disk2/jieli/datasets--/cifar',
-    'fashion-mnist':    '/disk2/jieli/datasets--/fashion-mnist',
+    'mnist':            '/disk2/jieli/datasets/mnist',
+    'cifar10':          '/disk2/jieli/datasets/cifar',
+    'fashion-mnist':    '/disk2/jieli/datasets/fashion-mnist',
 }
 
 vislab12_datapath = {
