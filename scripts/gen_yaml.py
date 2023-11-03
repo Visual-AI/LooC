@@ -1,10 +1,9 @@
 import os
 
-
 vislab3_datapath = {
-    'mnist':            '/disk2/jieli/datasets/mnist',
-    'cifar10':          '/disk2/jieli/datasets/cifar',
-    'fashion-mnist':    '/disk2/jieli/datasets/fashion-mnist',
+    'mnist':            '/disk2/jieli/datasets--/mnist',
+    'cifar10':          '/disk2/jieli/datasets--/cifar',
+    'fashion-mnist':    '/disk2/jieli/datasets--/fashion-mnist',
 }
 
 vislab12_datapath = {
@@ -32,8 +31,8 @@ def get_datapath(dataset_name):
     dataset_path = vislab13_datapath.get(dataset_name)
     if os.path.exists(dataset_path):
         return dataset_path
-    
-    print("# - "* 10, "check the datapath")
+
+    raise ValueError("- "* 10 + "check the datapath")
 
 
 def get_yaml(cfg, flag_debug=False):
@@ -84,9 +83,9 @@ def get_yaml(cfg, flag_debug=False):
     str_list.append(f"# size_dmbedding: num_embedding * dim_embedding")
     
     str_list.append("")
-    str_list.append(f"distance: cos           # distance for codevectors and features")
-    str_list.append(f"split_type: fixed       # fixed, interval, random")
-    str_list.append(f"anchor: closest         # anchor sampling methods (random, closest, probrandom)")
+    str_list.append(f"distance: {cfg.get('distance')}       # distance for codevectors and features")
+    str_list.append(f"split_type: {cfg.get('split_type')}   # fixed, interval, random")
+    str_list.append(f"anchor: {cfg.get('anchor')}           # anchor sampling methods (random, closest, probrandom)")
     
     str_list.append("")
     str_list.append(f"##### eval")
