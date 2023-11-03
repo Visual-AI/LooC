@@ -43,7 +43,7 @@ def get_yaml(cfg, flag_debug=False):
     # exp_name = f"{cfg['dataset']}{str_evq}{str_split}_{cfg['distance']}_{cfg['anchor']}_{cfg['embedding_num']}x{cfg['embedding_dim']}"
 
     str_list = []
-    print('#'*10, list(cfg.keys()))
+    # print('#'*10, list(cfg.keys()))
 
     exp_name = f"{cfg.get('dataset')}_{cfg.get('embedding_num')}x{cfg.get('embedding_dim')}x{cfg.get('shuffle_scale')}_{cfg.get('exp_tag')}"
 
@@ -179,23 +179,49 @@ def main_exp_mnist():
     cfg.update({"dataset": 'mnist'})
     flag_debug = False                  # True for debug
     merge_sh = False                    # 
-    gpu_list = [3, 1, 2, 0, 6, 6]       # 
+    gpu_list = [0, 1, 2, 3, 4, 5, 6, 7]       # 
     cfg.update({"shuffle_scale": 0})    # 
     cfg.update({"batch_size": 512})
 
-    # exp -- finddim
-    cfg.update({"exp_tag": 'finddim'})
-    cfg.update({"output_folder": 'exps/exp_finddim'})
-    num = 256                           # 
-    # num = 128
-    embedding_num_dim = [
-        (num,   4),
-        (num,   8),
-        (num,  16),
-        (num,  32),
-        (num,  64),
-        (num, 128),
-    ]
+    # exp -- batchsize
+    batchsize = 64
+    gpu_list = [4]
+    batchsize = 128
+    gpu_list = [5]
+    batchsize = 256
+    gpu_list = [6]
+    batchsize = 512
+    gpu_list = [7]
+    exp_tag = f'batchsizex{batchsize}'
+    cfg.update({"exp_tag": exp_tag})
+    cfg.update({"batch_size": batchsize})
+    cfg.update({"output_folder": 'exps/batchsize'})
+    embedding_num_dim = [(256,   4),]
+
+    # # exp -- keepdim
+    # cfg.update({"exp_tag": 'keepdim'})
+    # cfg.update({"output_folder": 'exps/exp_keepdim'})
+    # embedding_num_dim = [
+    #     (8192,   4),
+    #     (4096,   8),
+    #     (2048,  16),
+    #     (1024,  32),
+    #     ( 512,  64),
+    #     ( 256, 128),
+    # ]
+
+    # cfg.update({"exp_tag": 'finddim'})
+    # cfg.update({"output_folder": 'exps/exp_finddim'})
+    # num = 256                           # 
+    # # num = 128
+    # embedding_num_dim = [
+    #     (num,   4),
+    #     (num,   8),
+    #     (num,  16),
+    #     (num,  32),
+    #     (num,  64),
+    #     (num, 128),
+    # ]
 
     # exp -- findnum
     """
@@ -493,6 +519,6 @@ if __name__ == '__main__':
     # main_exp_imagenet()
     # main_exp_ffhq()
 
-    # main_exp_mnist()
+    main_exp_mnist()
     # main_exp_cifar10()
-    main_exp_fashion_mnist()
+    # main_exp_fashion_mnist()
