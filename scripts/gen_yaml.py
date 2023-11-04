@@ -147,10 +147,13 @@ def main_exp_base(cfg, embedding_num_dim, gpu_list, merge_sh, flag_debug):
     # -----
     cnt = 0
     sh_str_list = []
-    for n, d in embedding_num_dim:
+    for num_dim_batch in embedding_num_dim:
+        n, d = num_dim_batch[0:2]
         gpu_id = gpu_list[0] if merge_sh else gpu_list[cnt]
         cfg.update({"gpu_id": gpu_id})
         cfg.update({"embedding_num":n, "embedding_dim":d})
+        if len(num_dim_batch) == 3:
+            cfg.update({"batch_size": num_dim_batch[2]})
         exp_name = get_yaml(cfg, flag_debug)
         sh_str_i = get_sh(cfg, exp_name)
         sh_str_list.append(sh_str_i)
@@ -159,9 +162,9 @@ def main_exp_base(cfg, embedding_num_dim, gpu_list, merge_sh, flag_debug):
     if merge_sh:
         msh_filename = f"scripts/run_{cfg.get('dataset')}_{cfg.get('exp_tag')}"
         ss = cfg.get('shuffle_scale')
-
         msh_filename += "_["
-        for n, d in embedding_num_dim:
+        for num_dim_batch in embedding_num_dim:
+            n, d = num_dim_batch[0:2]
             msh_filename += f"{n}x{d}_"
         msh_filename = msh_filename[:-1] + f"]x{ss}.sh"
         fw = open(msh_filename,'w')
@@ -181,22 +184,24 @@ def main_exp_mnist():
     merge_sh = False                    # 
     gpu_list = [0, 1, 2, 3, 4, 5, 6, 7]       # 
     cfg.update({"shuffle_scale": 0})    # 
-    cfg.update({"batch_size": 512})
+    # cfg.update({"batch_size": 512})
 
     # exp -- batchsize
+    batchsize = 32
+    gpu_list = [2]
     batchsize = 64
-    gpu_list = [4]
-    batchsize = 128
-    gpu_list = [5]
-    batchsize = 256
-    gpu_list = [6]
-    batchsize = 512
-    gpu_list = [7]
+    gpu_list = [3]
+    # batchsize = 128
+    # gpu_list = [5]
+    # batchsize = 256
+    # gpu_list = [6]
+    # batchsize = 512
+    # gpu_list = [7]
     exp_tag = f'batchsizex{batchsize}'
     cfg.update({"exp_tag": exp_tag})
     cfg.update({"batch_size": batchsize})
     cfg.update({"output_folder": 'exps/batchsize'})
-    embedding_num_dim = [(256,   4),]
+    embedding_num_dim = [(512,   4),]
 
     # # exp -- keepdim
     # cfg.update({"exp_tag": 'keepdim'})
