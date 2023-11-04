@@ -179,29 +179,30 @@ def main_exp_base(cfg, embedding_num_dim, gpu_list, merge_sh, flag_debug):
 
 def main_exp_mnist():
     cfg = dict()
+    # --- init setting 
     cfg.update({"dataset": 'mnist'})
     flag_debug = False                  # True for debug
     merge_sh = False                    # 
     gpu_list = [0, 1, 2, 3, 4, 5, 6, 7]       # 
     cfg.update({"shuffle_scale": 0})    # 
-    # cfg.update({"batch_size": 512})
+    cfg.update({"batch_size": 512})
 
     # exp -- batchsize
-    batchsize = 32
-    gpu_list = [2]
-    batchsize = 64
-    gpu_list = [3]
-    # batchsize = 128
-    # gpu_list = [5]
-    # batchsize = 256
-    # gpu_list = [6]
-    # batchsize = 512
-    # gpu_list = [7]
-    exp_tag = f'batchsizex{batchsize}'
-    cfg.update({"exp_tag": exp_tag})
-    cfg.update({"batch_size": batchsize})
-    cfg.update({"output_folder": 'exps/batchsize'})
-    embedding_num_dim = [(512,   4),]
+    # batchsize = 32
+    # gpu_list = [2]
+    # batchsize = 64
+    # gpu_list = [3]
+    # # batchsize = 128
+    # # gpu_list = [5]
+    # # batchsize = 256
+    # # gpu_list = [6]
+    # # batchsize = 512
+    # # gpu_list = [7]
+    # exp_tag = f'batchsizex{batchsize}'
+    # cfg.update({"exp_tag": exp_tag})
+    # cfg.update({"batch_size": batchsize})
+    # cfg.update({"output_folder": 'exps/batchsize'})
+    # embedding_num_dim = [(512,   4),]
 
     # # exp -- keepdim
     # cfg.update({"exp_tag": 'keepdim'})
@@ -215,18 +216,21 @@ def main_exp_mnist():
     #     ( 256, 128),
     # ]
 
-    # cfg.update({"exp_tag": 'finddim'})
-    # cfg.update({"output_folder": 'exps/exp_finddim'})
-    # num = 256                           # 
-    # # num = 128
-    # embedding_num_dim = [
-    #     (num,   4),
-    #     (num,   8),
-    #     (num,  16),
-    #     (num,  32),
-    #     (num,  64),
-    #     (num, 128),
-    # ]
+    # exp -- finddim
+    cfg.update({"exp_tag": 'finddim'})
+    cfg.update({"output_folder": 'exps/exp_finddim'})
+    gpu_list = [1]
+    num = 256                           # 
+    # num = 128
+    embedding_num_dim = [
+        (num,   2),
+        # (num,   4),
+        # (num,   8),
+        # (num,  16),
+        # (num,  32),
+        # (num,  64),
+        # (num, 128),
+    ]
 
     # exp -- findnum
     """
