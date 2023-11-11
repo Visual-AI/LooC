@@ -472,14 +472,14 @@ def main(args):
 
     # plot_bincounts(bincounts_list, fig_id=1, bincount_fig_path=os.path.join(results_path, f'bincount_slice{slice_num}-all.png'))
 
-
+    exit(0)
     count_each_codebook_entry_matched_times_in_different_chunk(
         bincounts_list,
         fig_id=1, 
         fig_path=os.path.join(results_path,f'codebook_distribution_slice{slice_num}-usage.png')
         )
     
-    exit(0)
+    
 
     # 使用不同的fid_id,将每次绘图结果分别保存
     for idx in range(slice_num):
