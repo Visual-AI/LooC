@@ -4,6 +4,8 @@ __pycache__/
 exps
 exps*/
 
+config/*.yaml
+
 output
 output*/
 
