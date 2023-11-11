@@ -36,6 +36,7 @@ class VectorQuantiser(nn.Module):
         self.embedding = nn.Embedding(self.num_embed, self.embed_dim)
         self.embedding.weight.data.uniform_(-1.0 / self.num_embed, 1.0 / self.num_embed)
         self.register_buffer("embed_prob", torch.zeros(self.num_embed))
+        print("---> CVQ VectorQuantizer: init success.")
 
     
     def forward(self, z, temp=None, rescale_logits=False, return_logits=False):
@@ -115,9 +116,10 @@ class VectorQuantiser(nn.Module):
         
         loss_dict.update({'loss': loss})
         # return z_q, loss_dict, (perplexity, min_encodings, encoding_indices)
-
         bin_count = torch.bincount(encoding_indices, minlength=self.num_embed)  # bincount 来获得不同codebook的出现频率
-        return z_q, loss_dict, (min_encodings, encoding_indices)
+        # min_encodings = min_encodings.type(torch.IntTensor)
+        return z_q, loss_dict, (encoding_indices, bin_count)
+
 
 
 class FeaturePool():

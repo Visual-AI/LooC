@@ -30,7 +30,7 @@ class VectorQuantizer(nn.Module):
 
         self.embedding = nn.Embedding(self.n_e, self.e_dim)
         self.embedding.weight.data.uniform_(-1.0 / self.n_e, 1.0 / self.n_e)
-        print("VectorQuantizer: init success.")
+        print("---> VQ VectorQuantizer: init success.")
 
     def forward(self, z):
         """
@@ -88,7 +88,15 @@ class VectorQuantizer(nn.Module):
         # reshape back to match original input shape
         z_q = z_q.permute(0, 3, 1, 2).contiguous()
 
-        return z_q, loss, (perplexity, min_encodings, min_encoding_indices)
+        # return z_q, loss, (perplexity, min_encodings, min_encoding_indices)
+
+        loss = {"loss": loss}
+        # print('min_encodings.shape =', min_encodings.shape)
+        # import pdb
+        # pdb.set_trace()
+        bin_count = torch.bincount(torch.squeeze(min_encoding_indices, 1), minlength=self.n_e)  # bincount 来获得不同codebook的出现频率
+        # min_encodings = min_encodings.type(torch.IntTensor)
+        return z_q, loss, (min_encoding_indices, bin_count)
 
     def get_codebook_entry(self, indices, shape):
         # shape specifying (batch, height, width, channel)

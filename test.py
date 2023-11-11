@@ -391,7 +391,7 @@ def main(args):
 
     model_output_list = [
         'image', 
-        'bincounts_list',
+        # 'bincounts_list',
         ]
 
     bincounts_list = [None] * slice_num
@@ -425,6 +425,8 @@ def main(args):
             encoding_indices_for_all_slice = encoding_indices.reshape(-1, slice_num)
             embed_num = bincount.shape[0]
             for i_n in range(slice_num):
+                # import pdb
+                # pdb.set_trace()
                 i_bc = torch.bincount(encoding_indices_for_all_slice[:, i_n], minlength=embed_num)  # bincount 来获得不同codebook的出现频率
                 # if torch.numel(i_bc) < embed_num:
                 #     miss_num = embed_num - torch.numel(i_bc)

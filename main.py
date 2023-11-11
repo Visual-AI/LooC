@@ -228,7 +228,6 @@ def main(args):
                   # evq=args.evq,
                   split_type=args.split_type,
                   args=args,
-                  vq=args.get('vq', 'lorc_old'),
                   ).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 

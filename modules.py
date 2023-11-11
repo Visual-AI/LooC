@@ -2,12 +2,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-<<<<<<< HEAD
-# from quantise import EfficientVectorQuantiser
-
-
-=======
->>>>>>> e5d4def170cff241c69fa11cdb73c81c0772b828
 
 class Residual(nn.Module):
     def __init__(self, in_channels, num_hiddens, num_residual_hiddens):
@@ -113,8 +107,7 @@ class Model(nn.Module):
                  embedding_dim, commitment_cost=0.25, distance='l2', 
                  anchor='closest', first_batch=False, contras_loss=True, 
                  split_type='fixed',
-                 args=None,
-                 vq='lorc_old',):
+                 args=None):
         super(Model, self).__init__()
 
         # num_hiddens == embedding_dim*slice_num 才是最终输出的dim
@@ -131,20 +124,31 @@ class Model(nn.Module):
                                       out_channels=_pre_out_channel,
                                       kernel_size=1, 
                                       stride=1)
-        if vq == 'cvq':
-            from cvq.quantise import VectorQuantiser
+        vq=args.get('vq', 'lorc_old')
+        if vq == 'vq':
+            from quantizer_zoo.VQ_VAE.quantize import VectorQuantizer
+            self._vq_vae = VectorQuantizer(num_embeddings, embedding_dim, commitment_cost)
+            
+            # embed_num, embed_dim, beta, 
+            #      args=None, 
+            #      remap=None,
+            #      sane_index_shape=False):
+            
+
+        elif vq == 'cvq':
+            from quantizer_zoo.CVQ.quantise import VectorQuantiser
             self._vq_vae = VectorQuantiser(num_embeddings, embedding_dim, commitment_cost, distance=distance, 
                                        anchor=anchor, first_batch=first_batch, contras_loss=contras_loss) 
         elif vq == 'lorc':    
-            from lorc.quantise import VectorQuantizer
-            self._vq_vae = VectorQuantizer(num_embeddings, embedding_dim, commitment_cost, distance=distance, 
+            from quantizer_zoo.LoRC_VAE.quantise import VectorQuantizer
+            self._vq_vae = VectorQuantizer(num_embeddings, embedding_dim, commitment_cost, 
                                            args=args,
                                     #    anchor=anchor, first_batch=first_batch, contras_loss=contras_loss,
                                     #    split_type=split_type,
                                        
-                                       )
+                                        )
         elif vq == 'lorc_old':    
-            from quantise import EfficientVectorQuantiser
+            from code_backup.quantise import EfficientVectorQuantiser
             self._vq_vae = EfficientVectorQuantiser(num_embeddings, embedding_dim, commitment_cost, distance=distance, 
                                        anchor=anchor, first_batch=first_batch, contras_loss=contras_loss,
                                        split_type=split_type,

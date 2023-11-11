@@ -7,54 +7,38 @@ from torch import einsum
 from einops import rearrange
 from icecream import ic 
 
-vq_args = {
-    "distance": 'cos',
-    "anchor": 'probrandom',
-    "split_type": 'fixed',
 
-    "sim_loss": 0,
-    "shuffle_scale": 2,
-
-    "contras_loss": False,
-    "scale_sim_loss": 0, 
-
-    "return_loss_dict": False,          # True， 则将loss 的每一项保存在dict中，并返回dict
-
-
-}
-
-
-class VectorQuantizer(nn.Module):
+class EfficientVectorQuantiser(nn.Module):
     """
     Improved version over vector quantiser, with the dynamic initialisation
     for these unoptimised "dead" points.
-    embed_num: number of codebook entry
-    embed_dim: dimensionality of codebook entry
+    num_embed: number of codebook entry
+    dim_embed: dimensionality of codebook entry
     beta: weight for the commitment loss
     distance: distance for looking up the closest code
     anchor: anchor sampled methods
     contras_loss: if true, use the contras_loss to further improve the performance
     """
-    def __init__(self, embed_num, embed_dim, beta, 
-                 args=None, 
-                 remap=None,
-                 sane_index_shape=False):
+    def __init__(self, num_embed, dim_embed, beta, 
+                 distance='cos', 
+                 anchor='probrandom', 
+                 first_batch=False, 
+                 contras_loss=False,
+                 split_type='fixed',
+                 args=None):
         super().__init__()
-        if (remap is not None) or sane_index_shape:
-            raise NotImplementedError
-        if args is None:
-            print("args is None, using default settings.")
-            args = vq_args
 
-        self.embed_num = embed_num
-        self.embed_dim = embed_dim
+        self.num_embed = num_embed
+        self.dim_embed = dim_embed
         self.beta = beta
-        self.distance = args.get('distance')
-        self.anchor = args.get('anchor')
-        self.contras_loss = args.get('contras_loss')
-        self.scale_sim_loss = args.get('scale_sim_loss')
-        self.return_loss_dict = args.get('return_loss_dict', True)
-        
+        self.distance = distance
+        self.anchor = anchor
+
+        # --
+        self.first_batch = first_batch
+        self.init = False
+        self.contras_loss = contras_loss
+        self.scale_sim_loss= args.get('sim_loss', 0)
 
         if self.scale_sim_loss == 0:
             self.calc_sim_loss= args.get('calc_sim_loss', False)
@@ -62,28 +46,31 @@ class VectorQuantizer(nn.Module):
             self.calc_sim_loss= args.get('calc_sim_loss', True)
 
         # --
-        self.split_type = args.get('split_type')
+        self.split_type = split_type
         self.decay = 0.99
-        self.scale_sim_loss= args.get('sim_loss', 0)
+        scale_grad_by_freq = False # args.scale_grad_by_freq if args else False
         self.shuffle_scale = args.get('shuffle_scale', 0)
 
-        self.pool = FeaturePool(self.embed_num, self.embed_dim)
-        self.embedding = nn.Embedding(self.embed_num, self.embed_dim)
-        self.embedding.weight.data.uniform_(-1.0 / self.embed_num, 1.0 / self.embed_num)
-        self.register_buffer("embed_prob", torch.zeros(self.embed_num))
+        self.pool = FeaturePool(self.num_embed, self.dim_embed)
+        self.embedding = nn.Embedding(self.num_embed, self.dim_embed, scale_grad_by_freq=scale_grad_by_freq)  # default = False
+        self.embedding.weight.data.uniform_(-1.0 / self.num_embed, 1.0 / self.num_embed)
+        self.register_buffer("embed_prob", torch.zeros(self.num_embed))
 
-        print(f"EfficientVectorQuantiser: codebook_size = {self.embed_num} * {self.embed_dim} = {self.embed_num * self.embed_dim}")
-        print(f"split_type = {self.split_type}")
-        print(f"anchor = {self.anchor}")
+        self.codebook_size = self.num_embed * self.dim_embed  
+        print(f"EfficientVectorQuantiser: codebook_size = num_embed * embed_dim = {self.num_embed} * {self.dim_embed} = {self.codebook_size}")
+        print(f"split_type = {split_type}")
+        print(f"anchor = {anchor}")
+        print(f"scale_grad_by_freq = {scale_grad_by_freq}")
         print(f"self.scale_sim_loss = {self.scale_sim_loss}")
         print(f"self.calc_sim_loss = {self.calc_sim_loss}")
         print("self.training =", self.training)
         print("self.shuffle_scale =", self.shuffle_scale)
-        print("---> Looc VQ VectorQuantizer: init success.")
+        print("---> Lorc old VQ VectorQuantizer: init success.")
 
 
     def upsample(self, x, scale_factor=2):
         # N,C,H_in,W_in --> N,C,H_in*scale_factor,W_in*scale_factor
+        # y = F.upsample(x, scale_factor=scale_factor, mode='bilinear')
         y = F.interpolate(x, scale_factor=scale_factor, mode='bilinear')
         # shape (∗,C,H×r,W×r) to (∗,C×r^2,H,W)
         y = F.pixel_unshuffle(y, downscale_factor=scale_factor) 
@@ -93,7 +80,6 @@ class VectorQuantizer(nn.Module):
         # y = y.reshape([bs, c*scale_factor**2, h, w])
         return y
     
-
     def downsample(self, x, scale_factor=2):
         # shape (∗,C×r^2,H,W) to (∗,C,H×r,W×r) 
         y = F.pixel_shuffle(x, upscale_factor=scale_factor) 
@@ -101,7 +87,7 @@ class VectorQuantizer(nn.Module):
         return y
 
         
-    def preprocess(self, z, embed_dim):
+    def embedding_split(self, z, embed_dim):
         # Split the feature vector into multiple segments with fixed, interval, or random gaps
         if self.split_type == 'fixed':
             z_flattened = z.view(-1, embed_dim)
@@ -135,24 +121,32 @@ class VectorQuantizer(nn.Module):
 
         return z_flattened
 
-
     def forward(self, z, temp=None, rescale_logits=False, return_logits=False):
         assert temp is None or temp==1.0, "Only for interface compatible with Gumbel"
         assert rescale_logits==False, "Only for interface compatible with Gumbel"
         assert return_logits==False, "Only for interface compatible with Gumbel"
 
-        # ic('quantise->z.shape: ', z.shape)  # bs * C * 16 * 16
+        # ic('quantise->z.shape: ', z.shape)
 
         if self.shuffle_scale:
             z = self.upsample(z, scale_factor=self.shuffle_scale)
         # reshape z -> (batch, height, width, channel) and flatten
         z = rearrange(z, 'b c h w -> b h w c').contiguous()
 
-        embed_dim = self.embed_dim
-        embed_num = self.embed_num
+        # # 仅特殊情况下设置self.slice_num， 其余情况均为None
+        # if False and self.slice_num and not self.training:  # slice_num == None, 则是使用slice 的方式处理 CVQ-VAE的codebook
+        #     # self.embedding = nn.Embedding(self.num_embed, self.embed_dim)
+        #     embed_dim = int(self.dim_embed / self.slice_num)
+        #     embed_num = int(self.num_embed * self.slice_num)
+        #     # print("embed_num, embed_dim", embed_num, embed_dim)
+        #     embed_weight = self.embedding.weight.reshape((embed_num, embed_dim))
+        # else:
+        embed_dim = self.dim_embed
+        embed_num = self.num_embed
         embed_weight = self.embedding.weight
         
-        z_flattened = self.preprocess(z, embed_dim)
+        # z_flattened = z.view(-1, embed_dim)
+        z_flattened = self.embedding_split(z, embed_dim)
 
         # calculate the distance
         if self.distance == 'l2':
@@ -163,10 +157,10 @@ class VectorQuantizer(nn.Module):
         elif self.distance == 'cos':
             # cosine distances from z to embeddings e_j 
             normed_z_flattened = F.normalize(z_flattened, dim=1).detach()       # [bs * h * w * slice_num, embed_dim]
-            normed_codebook = F.normalize(embed_weight, dim=1)         # [embed_num, embed_dim]
+            normed_codebook = F.normalize(embed_weight, dim=1)         # [num_embed, embed_dim]
 
             # 以下这步einsum的显存占用，与embed_num成正比，与embed_dim^2成反比。因而embed_num x embed_dim = 8192 x 2时，显存占用很高。
-            # dist = torch.einsum('bd,dn->bn', normed_z_flattened, rearrange(normed_codebook, 'n d -> d n'))  # [bs * h * w * slice_num, embed_num], # [1024*8*8*16=1048576, 4096]  # embed_num=4096, embed_dim=8, 300M
+            # dist = torch.einsum('bd,dn->bn', normed_z_flattened, rearrange(normed_codebook, 'n d -> d n'))  # [bs * h * w * slice_num, num_embed], # [1024*8*8*16=1048576, 4096]  # num_embed=4096, embed_dim=8, 300M
             # print("dist.shape:", dist.shape, "z.shape:", z.shape, "self.embedding.weight.shape:", self.embedding.weight.shape)
             # cosine_similarity = torch.matmul(normed_z_flattened, normed_codebook.t())  # {a} . {b}
             # cos_sim = {a} . {b} / |a|*|b|, 值域为[-1， 1]。1为相同，-1则相反
@@ -174,9 +168,52 @@ class VectorQuantizer(nn.Module):
             feature_dim = z.shape[-1]
             slice_num = feature_dim // embed_dim
             
-            dist = torch.einsum('bd,dn->bn', normed_z_flattened, rearrange(normed_codebook, 'n d -> d n'))  # [bs * h * w * slice_num, embed_num], # [1024*8*8*16=1048576, 4096]  # embed_num=4096, embed_dim=8, 300M
-            encoding_indices = torch.argmax(dist, dim=1)
-            encoding_indices_dim0 = torch.argmax(dist, dim=0)
+            if False and embed_num * slice_num >= 2048 * 64:  
+                # -- slice num 较大或codebook较长时，分段计算距离（相似度），取相似度最高的index  
+                # -- 将中间变量“相似度矩阵”给丢掉，能够减少显存消耗，但是不能减少计算量
+                # dist_list= []
+                _tmp_n = slice_num
+                encoding_indices_list = []
+                encoding_indices_list_dim0 = []
+                values_list = []
+                indices_list= []
+                normed_z_flattened = normed_z_flattened.view(-1, _tmp_n, embed_dim)  # [bs * h * w, slice_num, embed_dim]  # _tmp_n = slice_num
+
+                for i in range(_tmp_n):
+                    dist_i = torch.einsum('bd,dn->bn', normed_z_flattened[:, i], rearrange(normed_codebook, 'n d -> d n'))
+                    # dist_list.append(dist_i)  # 这一步依旧持续增长显存，改为取这一段中相似度最高的index
+                    encoding_indices_i = torch.argmax(dist_i, dim=1)
+                    encoding_indices_list.append(encoding_indices_i)
+
+                    # encoding_indices_i_dim0 = torch.argmax(dist_i, dim=0)
+                    # encoding_indices_list_dim0.append(encoding_indices_i_dim0)
+
+                    values, indices = torch.max(dist_i, dim=0, keepdim=False, out=None)  # shape = num of codebook
+                    ic(values.shape, indices.shape)
+                    values_list.append(values)
+                    indices_list.append(indices)
+                    
+
+                indices_tensor = torch.stack(indices_list, dim=1)
+                values_tensor = torch.stack(values_list, dim=1)
+                ic(len(values_list))
+                ic(values_tensor.shape, indices_tensor.shape)
+                values_idx = torch.argmax(values_tensor, dim=0)
+                ic(values_idx.shape)
+                # torch.take(input, index)->Tensor
+                # encoding_indices_dim0 = torch.take(indices_tensor, values_idx)
+                # torch.gather(input, dim, index, out=None)
+                # encoding_indices_dim0 = torch.gather(indices_tensor, dim=0, index=values_idx, out=None)
+                # torch.index_select(input, dim, index, out=None)
+                encoding_indices_dim0 = torch.index_select(indices_tensor, 1, values_idx, out=None)
+
+                ic(encoding_indices_dim0.shape)
+
+                
+            else:
+                dist = torch.einsum('bd,dn->bn', normed_z_flattened, rearrange(normed_codebook, 'n d -> d n'))  # [bs * h * w * slice_num, num_embed], # [1024*8*8*16=1048576, 4096]  # num_embed=4096, embed_dim=8, 300M
+                encoding_indices = torch.argmax(dist, dim=1)
+                encoding_indices_dim0 = torch.argmax(dist, dim=0)
         # ic("self.distance = ", self.distance)
         # ic(encoding_indices.shape, encoding_indices_dim0.shape)
         # TODO 改进dist
@@ -184,24 +221,49 @@ class VectorQuantizer(nn.Module):
         # import pdb
         # pdb.set_trace()
         # encoding
-        # 4096x8, 2.4G TODO 降低显存  # indices.shape = [bs * h * w * slice_num, self.embed_num]
+        # 4096x8, 2.4G TODO 降低显存  # indices.shape = [bs * h * w * slice_num, self.num_embed]
         # -- look up the closest point for the indices
         # sort_distance, indices = dist.sort(dim=1)   # dim = 1
         # encoding_indices = indices[:,-1]  # [bs * h * w * slice_num, ]
         if self.distance != 'cos':
-            encoding_indices = torch.argmax(dist, dim=1)  # [bs * h * w * slice_num, ]， 比sort 节省显存，尤其是当self.embed_num较大时
+            encoding_indices = torch.argmax(dist, dim=1)  # [bs * h * w * slice_num, ]， 比sort 节省显存，尤其是当self.num_embed较大时
        
         #  --------------------
-        # [bs * h * w * slice_num, embed_num] # embed_dim 越小，则slice_num越大；codebook_size相同时，self.embed_num也越大；
+        # [bs * h * w * slice_num, num_embed] # embed_dim 越小，则slice_num越大；codebook_size相同时，self.num_embed也越大；
         # 因此占用显存较大，呈2次方增长
-        # encodings = torch.zeros(encoding_indices.shape[0], self.embed_num, device=z.device)  
+        # encodings = torch.zeros(encoding_indices.shape[0], self.num_embed, device=z.device)  
         # encodings.scatter_(dim=1, index=encoding_indices.unsqueeze(1), src=1)
         # encodings 是每个feature在对应codebook索引位置是否是最近匹配的0/1 标志矩阵。可以看做是codebook在feature中的概率分布情况
 
-        bin_count = torch.bincount(encoding_indices, minlength=embed_num)  # bincount 来获得不同codebook的出现频率
+        if not self.training:
+            bin_count = torch.bincount(encoding_indices, minlength=embed_num)  # bincount 来获得不同codebook的出现频率
+            # # 补全bin_count
+            # if torch.numel(bin_count) < embed_num:
+            #     miss_num = embed_num - torch.numel(bin_count)
+            #     bin_count = F.pad(bin_count, [0, miss_num], "constant", 0)
+
+            # nonzero = torch.count_nonzero(bin_count)
+            # ic(embed_num - nonzero, z.shape[0], z_flattened.shape[0])
+            # ic(embed_num, self.num_embed)
+
+            # import pdb
+            # pdb.set_trace()
+            # encoding_indices_2 2048
+
+            # encodings = torch.zeros(encoding_indices.shape[0], self.num_embed, dtype=torch.float, device=z.device)   # 2048, 512
+            # encodings.scatter_(1, encoding_indices.unsqueeze(1), 1)
+            # avg_probs = bin_count / torch.sum(bin_count)
+            # perplexity = torch.exp(-torch.sum(avg_probs * torch.log(avg_probs + 1e-10)))
+            # min_encodings = encodings
+        else:
+            # bin_count = None
+            bin_count = torch.bincount(encoding_indices, minlength=embed_num)  # bincount 来获得不同codebook的出现频率
+            # min_encodings = None
+            # perplexity = None
+        # 对于未匹配的codebook怎么处理？
 
         # quantise and unflatten
-        # # [bs * h * w * slice_num, embed_num] [embed_num, embed_dim] --> [bs * h * w * slice_num, embed_dim]
+        # # [bs * h * w * slice_num, num_embed] [num_embed, embed_dim] --> [bs * h * w * slice_num, embed_dim]
         # z_q = torch.matmul(encodings, self.embedding.weight).view(z.shape)  
         z_q = embed_weight[encoding_indices, :] # num, dim
 
@@ -237,9 +299,9 @@ class VectorQuantizer(nn.Module):
             # add: each element of 'avg_probs' is scaled by alpha before being used.
             self.embed_prob.mul_(self.decay).add_(avg_probs, alpha= 1 - self.decay)  # TODO remove
             # running average updates
-            if self.anchor in ['closest', 'random', 'probrandom', 'disturbance']:
+            if self.anchor in ['closest', 'random', 'probrandom', 'disturbance'] and (not self.init):
                 # closest sampling
-                # 取最接近codebook的self.embed_num个flattened feature vector 
+                # 取最接近codebook的self.num_embed个flattened feature vector 
                 if self.anchor == 'closest':
                     # encoding_indices_dim0 = torch.argmax(dist, dim=0)
                     # sort_distance, indices = dist.sort(dim=0)
@@ -263,16 +325,17 @@ class VectorQuantizer(nn.Module):
                     random_feat = self.pool.query(z_flattened.detach())
                     # For each bit of feature, add a random disturbance between [-1, 1]
                     # 对feature的每一位，增加一个[-1, 1] 之间的随机扰动
-                    random_feat += (torch.rand((self.embed_num, self.embed_dim)) * 2 - 1).to(random_feat.device)        
+                    random_feat += (torch.rand((self.num_embed, self.dim_embed)) * 2 - 1).to(random_feat.device)        
 
                 # decay parameter based on the average usage
-                decay = torch.exp(-(self.embed_prob*self.embed_num*10)/(1-self.decay)-1e-3).unsqueeze(1).repeat(1, self.embed_dim)
+                decay = torch.exp(-(self.embed_prob*self.num_embed*10)/(1-self.decay)-1e-3).unsqueeze(1).repeat(1, self.dim_embed)
                 # decay = 0.99
                 # 初始值都比较小（0.002），逐渐增大（0.4）
                 # 说明随着训练逐渐收敛，codebook被匹配的向量逐渐固化下来，并且部分codebook的匹配较少。
                 # print("torch.max(decay)=", torch.max(decay))  
                 self.embedding.weight.data = self.embedding.weight.data * (1 - decay) + random_feat * decay
-
+                if self.first_batch:
+                    self.init = True
             elif self.anchor in ['none', 'mutation']:
                 if self.anchor == 'none':  # 
                     pass
@@ -300,7 +363,7 @@ class VectorQuantizer(nn.Module):
             # contrastive loss
             if self.contras_loss:
                 sort_distance, indices = dist.sort(dim=0)  # FIX 无需重复计算
-                dis_pos = sort_distance[-max(1, int(sort_distance.size(0)/self.embed_num)):,:].mean(dim=0, keepdim=True)
+                dis_pos = sort_distance[-max(1, int(sort_distance.size(0)/self.num_embed)):,:].mean(dim=0, keepdim=True)
                 dis_neg = sort_distance[:int(sort_distance.size(0)*1/2),:]
                 dis = torch.cat([dis_pos, dis_neg], dim=0).t() / 0.07         # 为什么 /0.07?
                 contra_loss = F.cross_entropy(dis, torch.zeros((dis.size(0),), dtype=torch.long, device=dis.device))
@@ -338,7 +401,7 @@ class VectorQuantizer(nn.Module):
                 # todo: 可以进一步考虑增加mask，只对相似度>阈值T=0.5的计算loss，或者将数量作为loss
                 # print('sim_loss:', sim_loss, 'loss:', loss)
                 loss_dict.update({'sim_loss': sim_loss}) 
-                # embed_num == self.embed_num == normed_codebook.size(0)
+                # embed_num == self.num_embed == normed_codebook.size(0)
 
                 # torch.min(cos_sim)
                 # torch.min(cos_sim2)
@@ -351,10 +414,8 @@ class VectorQuantizer(nn.Module):
         if self.shuffle_scale:
             z_q = self.downsample(z_q, scale_factor=self.shuffle_scale)
 
-        out_loss = loss_dict if self.return_loss_dict else loss
-
         # return z_q, loss, (encoding_indices, bin_count)
-        return z_q, out_loss, (encoding_indices, bin_count)
+        return z_q, loss_dict, (encoding_indices, bin_count)
 
 
 class FeaturePool():

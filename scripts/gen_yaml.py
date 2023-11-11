@@ -53,7 +53,6 @@ def get_yaml(cfg, flag_debug=False):
     str_list.append(f"exp_name: {exp_name}")
     str_list.append(f"output_folder: {cfg.get('output_folder')}")
     str_list.append(f"dataset: {cfg.get('dataset')}")
-    str_list.append(f"vq: {cfg.get('vq', 'lorc_old')}")
     str_list.append(f"batch_size: {cfg.get('batch_size')}")
     str_list.append(f"num_epochs: 500       # number of epochs (default: 100)")
 
@@ -78,7 +77,7 @@ def get_yaml(cfg, flag_debug=False):
     str_list.append(f"")
     str_list.append(f"# codebook")
     str_list.append(f"# Quantiser parameters")
-    str_list.append(f"shuffle_scale: {cfg.get('vq')}") 
+    str_list.append(f"vq: {cfg.get('vq', 'lorc_old')}")
     str_list.append(f"shuffle_scale: {cfg.get('shuffle_scale')}      # scale factor for upsample and downsample the feature vectors")
     str_list.append(f"num_embedding: {cfg.get('embedding_num')}      # number of codebook (default: 512)")
     str_list.append(f"dim_embedding: {cfg.get('embedding_dim')}")
@@ -162,7 +161,7 @@ def main_exp_base(cfg, embedding_num_dim, gpu_list, merge_sh, flag_debug):
         cnt += 1
 
     if merge_sh:
-        msh_filename = f"scripts/run_{cfg.get('dataset')}_{cfg.get('exp_tag')}"
+        msh_filename = f"scripts/run_{cfg.get('dataset')}_{cfg.get('vq')}_{cfg.get('exp_tag')}"
         ss = cfg.get('shuffle_scale')
         msh_filename += "_["
         for num_dim_batch in embedding_num_dim:
@@ -537,12 +536,13 @@ def main_exp_fig1a():
     cfg.update({"dataset": 'cifar10'})
     flag_debug = False                   # True for debug, False for exp
     merge_sh = False                    # 
-    gpu_list = [4,5,6,7]                      # 
+    gpu_list = [7,6,5,4]                      # 
     cfg.update({"shuffle_scale": 0})    #
-    cfg.update({"batch_size": 128})     #
+    cfg.update({"batch_size": 512})     #
 
     vq_list = ['vq', 'cvq', 'lorc-4', 'lorc-16', 'lorc-64']
     # vq_list = ['lorc-16', 'lorc-64']
+    vq_list = ['lorc-64']  # debug
 
     # exp -- finddim
     cfg.update({"exp_tag": 'fig1aDiffNum'})
@@ -553,6 +553,7 @@ def main_exp_fig1a():
     for vq in vq_list:
         if len(vq.split('-')) == 2:
             vq, dim = vq.split('-')
+            cfg.update({"batch_size": 128})
 
         embedding_num_dim = [
             (  32, dim),
@@ -562,6 +563,8 @@ def main_exp_fig1a():
             ( 512, dim),
             # (1024, dim),
             (2048, dim),
+
+            # ( 512, dim),  # debug
         ]
         cfg.update({"vq": vq})          # VQ method
         main_exp_base(cfg, embedding_num_dim, gpu_list, merge_sh, flag_debug)
