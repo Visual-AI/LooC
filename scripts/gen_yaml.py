@@ -45,7 +45,7 @@ def get_yaml(cfg, flag_debug=False):
     str_list = []
     # print('#'*10, list(cfg.keys()))
 
-    exp_name = f"{cfg.get('dataset')}_{cfg.get('embedding_num')}x{cfg.get('embedding_dim')}x{cfg.get('shuffle_scale')}_{cfg.get('exp_tag')}"
+    exp_name = f"{cfg.get('exp_tag')}_{cfg.get('dataset')}_{cfg.get('vq')}_{cfg.get('embedding_num')}x{cfg.get('embedding_dim')}x{cfg.get('shuffle_scale')}"
 
     ##### train
     str_list.append("Enable_Wandb: False   # for debug" if flag_debug else "Enable_Wandb: True   # default: True")
@@ -77,6 +77,7 @@ def get_yaml(cfg, flag_debug=False):
     str_list.append(f"")
     str_list.append(f"# codebook")
     str_list.append(f"# Quantiser parameters")
+    str_list.append(f"shuffle_scale: {cfg.get('vq')}") 
     str_list.append(f"shuffle_scale: {cfg.get('shuffle_scale')}      # scale factor for upsample and downsample the feature vectors")
     str_list.append(f"num_embedding: {cfg.get('embedding_num')}      # number of codebook (default: 512)")
     str_list.append(f"dim_embedding: {cfg.get('embedding_dim')}")
@@ -524,10 +525,44 @@ def main_exp_ffhq():
         gpu_id += 1
 
 
+def main_exp_fig1a():
+    cfg = dict()
+    cfg.update({"dataset": 'cifar10'})
+    flag_debug = False                   # True for debug, False for exp
+    merge_sh = False                    # 
+    gpu_list = [4,5,6,7]                      # 
+    cfg.update({"shuffle_scale": 0})    #
+    cfg.update({"batch_size": 128})     #
+
+    vq_list = ['vq', 'cvq', 'lorc-4', 'lorc-16', 'lorc-64']
+    # vq_list = ['lorc-16', 'lorc-64']
+
+    # exp -- finddim
+    cfg.update({"exp_tag": 'fig1aDiffNum'})
+    cfg.update({"output_folder": 'exps/fig1a'})
+    num = 128      # num of codebook                     # 
+    dim = 128      # dim of codebook
+
+    for vq in vq_list:
+        if len(vq.split('-')) == 2:
+            vq, dim = vq.split('-')
+
+        embedding_num_dim = [
+            (  32, dim),
+            # (  64, dim),
+            ( 128, dim),
+            # ( 256, dim),
+            ( 512, dim),
+            # (1024, dim),
+            (2048, dim),
+        ]
+        cfg.update({"vq": vq})          # VQ method
+        main_exp_base(cfg, embedding_num_dim, gpu_list, merge_sh, flag_debug)
+
 if __name__ == '__main__':
     # main_exp_imagenet()
     # main_exp_ffhq()
 
-    main_exp_mnist()
+    main_exp_fig1a()
     # main_exp_cifar10()
     # main_exp_fashion_mnist()

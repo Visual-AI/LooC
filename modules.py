@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from quantise import EfficientVectorQuantiser
+# from quantise import EfficientVectorQuantiser
 
 
 
@@ -126,10 +126,18 @@ class Model(nn.Module):
                                       out_channels=_pre_out_channel,
                                       kernel_size=1, 
                                       stride=1)
-        self._vq_vae = EfficientVectorQuantiser(num_embeddings, embedding_dim, commitment_cost, distance=distance, 
+        if args.get('vq') == 'lorc':
+            from qzquantise import EfficientVectorQuantiser
+            self._vq_vae = EfficientVectorQuantiser(num_embeddings, embedding_dim, commitment_cost, distance=distance, 
                                        anchor=anchor, first_batch=first_batch, contras_loss=contras_loss,
                                        split_type=split_type,
-                                       args=args)        
+                                       args=args)
+        elif args.get('vq') == 'lorc':        
+            from qzquantise import EfficientVectorQuantiser
+            self._vq_vae = EfficientVectorQuantiser(num_embeddings, embedding_dim, commitment_cost, distance=distance, 
+                                       anchor=anchor, first_batch=first_batch, contras_loss=contras_loss,
+                                       split_type=split_type,
+                                       args=args)
         
         self._decoder = Decoder(decoder_in_channel,
                                 num_hiddens, 
