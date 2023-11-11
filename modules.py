@@ -2,9 +2,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from quantise import EfficientVectorQuantiser
-
-
 
 class Residual(nn.Module):
     def __init__(self, in_channels, num_hiddens, num_residual_hiddens):
@@ -106,10 +103,12 @@ class Decoder(nn.Module):
 
 class Model(nn.Module):
     def __init__(self, input_dim, num_hiddens, num_residual_layers, num_residual_hiddens, 
-                 num_embeddings, embedding_dim, commitment_cost=0.25, distance='l2', 
+                 num_embeddings, 
+                 embedding_dim, commitment_cost=0.25, distance='l2', 
                  anchor='closest', first_batch=False, contras_loss=True, 
                  split_type='fixed',
-                 args=None):
+                 args=None,
+                 vq='lorc_old',):
         super(Model, self).__init__()
 
         # num_hiddens == embedding_dim*slice_num 才是最终输出的dim
@@ -126,10 +125,26 @@ class Model(nn.Module):
                                       out_channels=_pre_out_channel,
                                       kernel_size=1, 
                                       stride=1)
-        self._vq_vae = EfficientVectorQuantiser(num_embeddings, embedding_dim, commitment_cost, distance=distance, 
+        if vq == 'cvq':
+            from cvq.quantise import VectorQuantiser
+            self._vq_vae = VectorQuantiser(num_embeddings, embedding_dim, commitment_cost, distance=distance, 
+                                       anchor=anchor, first_batch=first_batch, contras_loss=contras_loss) 
+        elif vq == 'lorc':    
+            from lorc.quantise import VectorQuantizer
+            self._vq_vae = VectorQuantizer(num_embeddings, embedding_dim, commitment_cost, distance=distance, 
+                                           args=args,
+                                    #    anchor=anchor, first_batch=first_batch, contras_loss=contras_loss,
+                                    #    split_type=split_type,
+                                       
+                                       )
+        elif vq == 'lorc_old':    
+            from quantise import EfficientVectorQuantiser
+            self._vq_vae = EfficientVectorQuantiser(num_embeddings, embedding_dim, commitment_cost, distance=distance, 
                                        anchor=anchor, first_batch=first_batch, contras_loss=contras_loss,
                                        split_type=split_type,
-                                       args=args)        
+                                       args=args)
+        else:
+            raise NotImplementedError(f"{vq} not ImplementedError")
         
         self._decoder = Decoder(decoder_in_channel,
                                 num_hiddens, 

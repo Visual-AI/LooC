@@ -218,6 +218,7 @@ def main(args):
     
     # Define the model
     print("Define the model")
+    print("VQ =", args.get('vq', 'lorc_old'))
     model = Model(num_channels, args.hidden_size, args.num_residual_layers, args.num_residual_hidden,
                   args.num_embedding, args.dim_embedding, args.commitment_cost, args.distance,
                   args.anchor, 
@@ -227,6 +228,7 @@ def main(args):
                   # evq=args.evq,
                   split_type=args.split_type,
                   args=args,
+                  vq=args.get('vq', 'lorc_old'),
                   ).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 

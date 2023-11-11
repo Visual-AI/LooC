@@ -53,6 +53,7 @@ def get_yaml(cfg, flag_debug=False):
     str_list.append(f"exp_name: {exp_name}")
     str_list.append(f"output_folder: {cfg.get('output_folder')}")
     str_list.append(f"dataset: {cfg.get('dataset')}")
+    str_list.append(f"vq: {cfg.get('vq', 'lorc_old')}")
     str_list.append(f"batch_size: {cfg.get('batch_size')}")
     str_list.append(f"num_epochs: 500       # number of epochs (default: 100)")
 
@@ -181,28 +182,34 @@ def main_exp_mnist():
     cfg = dict()
     # --- init setting 
     cfg.update({"dataset": 'mnist'})
-    flag_debug = False                  # True for debug
+    cfg.update({"vq": "cvq"})    # 
+    flag_debug = True                  # True for debug
     merge_sh = False                    # 
     gpu_list = [0, 1, 2, 3, 4, 5, 6, 7]       # 
     cfg.update({"shuffle_scale": 0})    # 
-    cfg.update({"batch_size": 512})
+    # cfg.update({"batch_size": 512})
 
     # exp -- batchsize
+    batchsize = 128
+    gpu_list = [6]
     # batchsize = 32
     # gpu_list = [2]
     # batchsize = 64
     # gpu_list = [3]
-    # # batchsize = 128
-    # # gpu_list = [5]
-    # # batchsize = 256
-    # # gpu_list = [6]
-    # # batchsize = 512
-    # # gpu_list = [7]
-    # exp_tag = f'batchsizex{batchsize}'
-    # cfg.update({"exp_tag": exp_tag})
-    # cfg.update({"batch_size": batchsize})
-    # cfg.update({"output_folder": 'exps/batchsize'})
-    # embedding_num_dim = [(512,   4),]
+    # batchsize = 128
+    # gpu_list = [5]
+    # batchsize = 256
+    # gpu_list = [6]
+    # batchsize = 512
+    # gpu_list = [7]
+    exp_tag = f'batchsizex{batchsize}'
+    cfg.update({"exp_tag": exp_tag})
+    cfg.update({"batch_size": batchsize})
+    cfg.update({"output_folder": 'exps/batchsize'})
+    embedding_num_dim = [
+        # (256,   4, ),
+        (1024,   32, ),
+        ]
 
     # # exp -- keepdim
     # cfg.update({"exp_tag": 'keepdim'})
@@ -217,20 +224,20 @@ def main_exp_mnist():
     # ]
 
     # exp -- finddim
-    cfg.update({"exp_tag": 'finddim'})
-    cfg.update({"output_folder": 'exps/exp_finddim'})
-    gpu_list = [1]
-    num = 256                           # 
+    # cfg.update({"exp_tag": 'finddim'})
+    # cfg.update({"output_folder": 'exps/exp_finddim'})
+    # gpu_list = [2]
+    # # num = 256                           # 
     # num = 128
-    embedding_num_dim = [
-        (num,   2),
-        # (num,   4),
-        # (num,   8),
-        # (num,  16),
-        # (num,  32),
-        # (num,  64),
-        # (num, 128),
-    ]
+    # embedding_num_dim = [
+    #     (num,   2),
+    #     # (num,   4),
+    #     # (num,   8),
+    #     # (num,  16),
+    #     # (num,  32),
+    #     # (num,  64),
+    #     # (num, 128),
+    # ]
 
     # exp -- findnum
     """
