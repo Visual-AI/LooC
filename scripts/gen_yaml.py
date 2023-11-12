@@ -536,13 +536,16 @@ def main_exp_fig1a():
     cfg.update({"dataset": 'cifar10'})
     flag_debug = False                   # True for debug, False for exp
     merge_sh = False                    # 
-    gpu_list = [7,6,5,4]                      # 
+    gpu_list = [3,4,5,6,7]                      # 
     cfg.update({"shuffle_scale": 0})    #
     cfg.update({"batch_size": 512})     #
 
     vq_list = ['vq', 'cvq', 'lorc-4', 'lorc-16', 'lorc-64']
-    # vq_list = ['lorc-16', 'lorc-64']
-    vq_list = ['lorc-64']  # debug
+    vq_list = ['vq']
+    vq_list = ['cvq']
+    vq_list = ['lorc-64']
+    vq_list = ['lorc-16']
+    vq_list = ['lorc-4'] # debug
 
     # exp -- finddim
     cfg.update({"exp_tag": 'fig1aDiffNum'})
@@ -556,16 +559,64 @@ def main_exp_fig1a():
             cfg.update({"batch_size": 128})
 
         embedding_num_dim = [
-            (  32, dim),
+            (   8, dim),
+            (  16, dim),
+            # (  32, dim),
             # (  64, dim),
-            ( 128, dim),
+            # ( 128, dim),
             # ( 256, dim),
-            ( 512, dim),
+            # ( 512, dim),
             # (1024, dim),
-            (2048, dim),
+            # (2048, dim),
 
             # ( 512, dim),  # debug
         ]
+        cfg.update({"vq": vq})          # VQ method
+        main_exp_base(cfg, embedding_num_dim, gpu_list, merge_sh, flag_debug)
+
+
+def main_exp_fig3(): # VQ-GAN 的代码中进行
+    cfg = dict()
+    cfg.update({"dataset": 'imagenet'})
+    flag_debug = False                   # True for debug, False for exp
+    merge_sh = False                    # 
+    gpu_list = [3,4,5,6,7]                      # 
+    cfg.update({"shuffle_scale": 0})    #
+    cfg.update({"batch_size": 512})     #
+
+    vq_list = ['vq', 'cvq', 'lorc-4', 'lorc-16', 'lorc-64']
+    vq_list = ['vq']
+    vq_list = ['cvq']
+    vq_list = ['lorc-64']
+    vq_list = ['lorc-16']
+    vq_list = ['lorc-4'] # debug
+
+    # exp -- finddim
+    cfg.update({"exp_tag": 'fig3Rec'})
+    cfg.update({"output_folder": 'exps/fig3'})
+    num = 1024      # num of codebook                     # 
+    dim = 128      # dim of codebook
+
+    for vq in vq_list:
+        if len(vq.split('-')) == 2:
+            vq, dim = vq.split('-')
+            cfg.update({"batch_size": 128})
+        
+        if vq == 'vq':
+
+            embedding_num_dim = [
+                (   8, dim),
+                (  16, dim),
+            # (  32, dim),
+            # (  64, dim),
+            # ( 128, dim),
+            # ( 256, dim),
+            # ( 512, dim),
+            # (1024, dim),
+            # (2048, dim),
+
+            # ( 512, dim),  # debug
+            ]
         cfg.update({"vq": vq})          # VQ method
         main_exp_base(cfg, embedding_num_dim, gpu_list, merge_sh, flag_debug)
 
