@@ -745,7 +745,7 @@ if __name__ == '__main__':
     # main_exp_fig1a()
     # main_exp_tab4()
     # main_exp_tab5()
-    main_exp_tab6()
+    # main_exp_tab6()
     main_exp_usage()
     # main_exp_cifar10()
     # main_exp_fashion_mnist()
