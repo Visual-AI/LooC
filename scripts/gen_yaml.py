@@ -169,7 +169,11 @@ def main_exp_base(cfg, embedding_num_dim, gpu_list, merge_sh, flag_debug):
             msh_filename += f"{n}x{d}_"
         msh_filename = msh_filename[:-1] + f"]x{ss}.sh"
         fw = open(msh_filename,'w')
-        for line in sh_str_list: 
+
+
+        for idx, line in enumerate(sh_str_list): 
+            if idx < len(sh_str_list)-1:
+                line += ' &'    # 让多条命令同时执行
             fw.write(line)  # 将字符串写入文件中
             fw.write("\n")  # 换行
             fw.write("\n")  # 换行
@@ -375,7 +379,6 @@ def main_exp_fashion_mnist():
     main_exp_base(cfg, embedding_num_dim, gpu_list, merge_sh, flag_debug)
 
 
-
 def main_exp_fashion_mnist_del():
     embedding_num_dim = [
         (128, 8),
@@ -575,55 +578,141 @@ def main_exp_fig1a():
         main_exp_base(cfg, embedding_num_dim, gpu_list, merge_sh, flag_debug)
 
 
-def main_exp_fig3(): # VQ-GAN 的代码中进行
+def main_exp_tab4():
     cfg = dict()
-    cfg.update({"dataset": 'imagenet'})
+    # cfg.update({"dataset": 'cifar10'})
+    # cfg.update({"dataset": 'mnist'})
+    cfg.update({"dataset": 'fashion-mnist'})
     flag_debug = False                   # True for debug, False for exp
-    merge_sh = False                    # 
-    gpu_list = [3,4,5,6,7]                      # 
+    merge_sh = True                    # 
+    gpu_list = [6,7]                      # 
     cfg.update({"shuffle_scale": 0})    #
     cfg.update({"batch_size": 512})     #
 
-    vq_list = ['vq', 'cvq', 'lorc-4', 'lorc-16', 'lorc-64']
-    vq_list = ['vq']
-    vq_list = ['cvq']
-    vq_list = ['lorc-64']
-    vq_list = ['lorc-16']
-    vq_list = ['lorc-4'] # debug
+    vq_list = ['lorc-4']
 
     # exp -- finddim
-    cfg.update({"exp_tag": 'fig3Rec'})
-    cfg.update({"output_folder": 'exps/fig3'})
-    num = 1024      # num of codebook                     # 
+    cfg.update({"exp_tag": 'tab4DiffNum'})
+    cfg.update({"output_folder": 'exps/tab4'})
+    num = 128      # num of codebook                     # 
     dim = 128      # dim of codebook
 
     for vq in vq_list:
         if len(vq.split('-')) == 2:
             vq, dim = vq.split('-')
             cfg.update({"batch_size": 128})
+
+        # embedding_num_dim = [
+        #     (   8, dim),
+        #     (  16, dim),
+        #     (  32, dim),
+        #     (  64, dim),
+        #     ( 128, dim),
+        #     ( 256, dim),
+        #     ( 512, dim),
+        #     (1024, dim),
+        #     (2048, dim),
+        # ]
         
-        if vq == 'vq':
+        # -- part1
+        embedding_num_dim = [
+            (  32, dim),
+            ( 128, dim),
+            ( 512, dim),
+            (2048, dim),
+        ]
+        # -- part2
+        # embedding_num_dim = [
+        #     (   8, dim),
+        #     (  16, dim),
+        #     (  64, dim),
+        #     ( 256, dim),
+        #     (1024, dim),
+        # ]
 
-            embedding_num_dim = [
-                (   8, dim),
-                (  16, dim),
-            # (  32, dim),
-            # (  64, dim),
-            # ( 128, dim),
-            # ( 256, dim),
-            # ( 512, dim),
-            # (1024, dim),
-            # (2048, dim),
-
-            # ( 512, dim),  # debug
-            ]
         cfg.update({"vq": vq})          # VQ method
         main_exp_base(cfg, embedding_num_dim, gpu_list, merge_sh, flag_debug)
+
+
+def main_exp_tab5():
+    cfg = dict()
+    # cfg.update({"dataset": 'cifar10'})
+    # cfg.update({"dataset": 'mnist'})
+    cfg.update({"dataset": 'fashion-mnist'})
+    flag_debug = False                   # True for debug, False for exp
+    merge_sh = True                    # 
+    gpu_list = [2]                      # 
+    cfg.update({"shuffle_scale": 0})    #
+    cfg.update({"batch_size": 512})     #
+
+    vq_list = ['lorc-4']
+
+    # exp -- finddim
+    cfg.update({"exp_tag": 'tab4DiffDim'})
+    cfg.update({"output_folder": 'exps/tab5'})
+    num = 256      # num of codebook                     # 
+
+    for vq in vq_list:
+        if len(vq.split('-')) == 2:
+            vq, _ = vq.split('-')
+            cfg.update({"batch_size": 128})
+        
+        # -- part1
+        embedding_num_dim = [
+            (num, 2),
+            (num, 4),
+            (num, 8),
+            (num, 16),
+            (num, 32),
+            (num, 64),
+        ]
+        cfg.update({"vq": vq})          # VQ method
+        main_exp_base(cfg, embedding_num_dim, gpu_list, merge_sh, flag_debug)
+
+
+def main_exp_tab6():
+    cfg = dict()
+    # cfg.update({"dataset": 'cifar10'})
+    # cfg.update({"dataset": 'mnist'})
+    cfg.update({"dataset": 'fashion-mnist'})
+    flag_debug = False                   # True for debug, False for exp
+    merge_sh = True                    # 
+    gpu_list = [5, 6, 7]                      # 
+    cfg.update({"shuffle_scale": 0})    #
+    cfg.update({"batch_size": 512})     #
+
+    vq_list = ['lorc-4']
+
+    # exp -- finddim
+    cfg.update({"exp_tag": 'tab6KeepSize'})
+    cfg.update({"output_folder": 'exps/tab6_keepsize'})
+    num = 256      # num of codebook                     # 
+
+    for vq in vq_list:
+        if len(vq.split('-')) == 2:
+            vq, _ = vq.split('-')
+            cfg.update({"batch_size": 128})
+        
+        # -- part1
+        embedding_num_dim = [
+            # (8192,   4),  # 12G
+            # (4096,   8), # 6G
+            (2048,  16),
+            (1024,  32),
+            ( 512,  64),
+            ( 256, 128),
+        ]
+        cfg.update({"vq": vq})          # VQ method
+        main_exp_base(cfg, embedding_num_dim, gpu_list, merge_sh, flag_debug)
+
 
 if __name__ == '__main__':
     # main_exp_imagenet()
     # main_exp_ffhq()
 
-    main_exp_fig1a()
+    # main_exp_fig1a()
+    # main_exp_tab4()
+    # main_exp_tab5()
+    main_exp_tab6()
     # main_exp_cifar10()
     # main_exp_fashion_mnist()
