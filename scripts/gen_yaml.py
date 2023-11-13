@@ -706,6 +706,38 @@ def main_exp_tab6():
         main_exp_base(cfg, embedding_num_dim, gpu_list, merge_sh, flag_debug)
 
 
+def main_exp_usage():
+    # exp: vq(dim 4 x chunk 32, K=1024) vs vq(dim=128 k=1024)
+    cfg = dict()
+    cfg.update({"dataset": 'mnist'})
+    flag_debug = False                   # True for debug, False for exp
+    merge_sh = False                    # 
+    gpu_list = [3,4,5,6,7]                      # 
+    cfg.update({"shuffle_scale": 0})    #
+    cfg.update({"batch_size": 512})     #
+
+    # vq_list = ['vq', 'cvq', 'lorc-4']
+    vq_list = ['vq']
+    # vq_list = ['cvq']
+    # vq_list = ['lorc-4']
+
+    cfg.update({"exp_tag": 'tabUsage'})
+    cfg.update({"output_folder": 'exps/tabUsage'})
+    num = 1024      # num of codebook                     # 
+    dim = 128       # dim of codebook
+
+    for vq in vq_list:
+        if len(vq.split('-')) == 2:
+            vq, dim = vq.split('-')
+            cfg.update({"batch_size": 128})
+
+        embedding_num_dim = [
+            # (num, 128),
+            (num, 4),
+            ]
+        cfg.update({"vq": vq})          # VQ method
+        main_exp_base(cfg, embedding_num_dim, gpu_list, merge_sh, flag_debug)
+
 if __name__ == '__main__':
     # main_exp_imagenet()
     # main_exp_ffhq()
@@ -714,5 +746,6 @@ if __name__ == '__main__':
     # main_exp_tab4()
     # main_exp_tab5()
     main_exp_tab6()
+    main_exp_usage()
     # main_exp_cifar10()
     # main_exp_fashion_mnist()
