@@ -657,6 +657,7 @@ if __name__ == '__main__':
     # main_exp_imagenet()
     # main_exp_ffhq()
 
-    main_exp_fig1a()
+    # main_exp_fig1a()
+    main_exp_usage()
     # main_exp_cifar10()
     # main_exp_fashion_mnist()
