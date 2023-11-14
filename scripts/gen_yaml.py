@@ -709,12 +709,14 @@ def main_exp_tab6():
 def main_exp_usage():
     # exp: vq(dim 4 x chunk 32, K=1024) vs vq(dim=128 k=1024)
     cfg = dict()
-    cfg.update({"dataset": 'mnist'})
+    cfg.update({"dataset": 'cifar10'})
+    # cfg.update({"dataset": 'mnist'})
+    cfg.update({"dataset": 'fashion-mnist'})
     flag_debug = False                   # True for debug, False for exp
     merge_sh = False                    # 
-    gpu_list = [3,4,5,6,7]                      # 
+    gpu_list = [2, 4,5,6,7]                      # 
     cfg.update({"shuffle_scale": 0})    #
-    cfg.update({"batch_size": 512})     #
+    cfg.update({"batch_size": 128})     #
 
     # vq_list = ['vq', 'cvq', 'lorc-4']
     vq_list = ['vq']

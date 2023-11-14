@@ -30,7 +30,7 @@ class VectorQuantizer(nn.Module):
 
         self.embedding = nn.Embedding(self.n_e, self.e_dim)
         self.embedding.weight.data.uniform_(-1.0 / self.n_e, 1.0 / self.n_e)
-        print("---> VQ VectorQuantizer: init success.")
+        print(f"---> VQ VectorQuantizer: {n_e} x {e_dim} init success.")
 
     def forward(self, z):
         """
