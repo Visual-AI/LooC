@@ -706,6 +706,41 @@ def main_exp_tab6():
         main_exp_base(cfg, embedding_num_dim, gpu_list, merge_sh, flag_debug)
 
 
+def main_exp_tab3():
+    # exp -- different shuffle
+    # dataset
+    # shuffle_scale
+    # dim
+    # shuffle_scale_list = [0, 2, 3, 4]  # 256x128x0, 则为CVQ相同的方法. 区别是num1024 --> 256,预期指标比CVQ略低
+    # TODO CVQ: 1024 * 128 *0 -->1024 * 128 *2 是否有提升
+
+    cfg = dict()
+    cfg.update({"dataset": 'cifar10'})
+    # cfg.update({"dataset": 'mnist'})
+    # cfg.update({"dataset": 'fashion-mnist'})
+    flag_debug = False                   # True for debug, False for exp
+    merge_sh = False                    # 
+    
+    cfg.update({"batch_size": 128})     #
+    cfg.update({"vq": 'lorc'})          # VQ method
+    cfg.update({"exp_tag": 'tab3shuffle'})
+    cfg.update({"output_folder": 'exps/tab3_shuffle'})
+    num = 256      # num of codebook  
+
+    # ---
+    gpu_list = [2, 5, 6, 7]
+    shuffle_scale_list = [4] 
+    for ss in shuffle_scale_list:
+        cfg.update({"shuffle_scale": ss}) 
+
+        embedding_num_dim = [
+            (num,  4),      # with split and different shuffle
+            # (num,  128),    # no split, only different shuffle
+        ]
+        
+        main_exp_base(cfg, embedding_num_dim, gpu_list, merge_sh, flag_debug)
+
+
 def main_exp_usage():
     # exp: vq(dim 4 x chunk 32, K=1024) vs vq(dim=128 k=1024)
     cfg = dict()
@@ -748,6 +783,7 @@ if __name__ == '__main__':
     # main_exp_tab4()
     # main_exp_tab5()
     # main_exp_tab6()
-    main_exp_usage()
+    # main_exp_usage()
+    main_exp_tab3()
     # main_exp_cifar10()
     # main_exp_fashion_mnist()
