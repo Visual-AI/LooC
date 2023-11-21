@@ -310,17 +310,28 @@ def main(args):
         test_dataset = ffhq.ImagesFolder(args.data_folder, split='val', transform=transform)  # 10k
         num_channels = 3
         test_dataset  = data_utils.Subset( test_dataset, torch.arange(1000))   #  1k
+    elif args.dataset in ['expINrec']:
+        print("Loading folder", args.data_folder)
+        transform = transforms.Compose([
+        transforms.Resize((512,512)),  # TODO default 256x256
+        transforms.ToTensor(),
+        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+        ]) 
+        test_dataset = ffhq.ImagesFolder(args.data_folder,
+            split='all', transform=transform)  
+        num_channels = 3
+        print("len(test_dataset)", len(test_dataset))
     else:
         raise NotImplementedError
 
     # Define the dataloaders
     test_loader = torch.utils.data.DataLoader(test_dataset, 
-                                              batch_size=16, # args.batch_size, 
+                                              batch_size=2, # args.batch_size, 
                                               shuffle=False)
 
     # Define the model
     model = Model(num_channels, args.hidden_size, args.num_residual_layers, args.num_residual_hidden,
-                      args.num_embedding, args.dim_embedding, distance=args.distance,
+                      args.num_embedding, args.dim_embedding, f=args.f, distance=args.distance,
                     #   lora_codebook=args.lora_codebook,
                     #   evq=args.evq,
                     #   slice_num=args.slice_num,  # TODO 去除这个参数，这个参数的含义很容易混淆。
@@ -399,6 +410,7 @@ def main(args):
     debug_max = 20
     debug_cnt = 0
     for images, label in tqdm(test_loader):
+        debug_cnt += 1
         images = images.to(device)
         x_recons, loss_dict, encoding_indices, bincount = model(images)  # TODO  # x_recon, loss, perplexity, encodings, bincount
         # -- save indexes
@@ -440,9 +452,12 @@ def main(args):
 
         if "image" in model_output_list:
             batch_size = images.shape[0]
+            
             fm_h = int(math.sqrt( torch.numel(encoding_indices) // slice_num // batch_size ))  # height of feature map
             fm_w = fm_h                                                                        # width of feature map
             encoding_index = encoding_indices.reshape(batch_size, fm_h, fm_w, slice_num)  # [bs, h, w, slice_num]
+
+            # print('batch_size =', batch_size, x_recons.shape, encoding_index.shape, images.shape)
             # -- save image
             for x_recon, image, idx in zip(x_recons, images, encoding_index):
                 x_recon = tensor2im(x_recon)
@@ -451,6 +466,7 @@ def main(args):
                 save_image(image, os.path.join(original_path, name))
                 save_image(x_recon, os.path.join(rec_path, name))
                 imageid += 1
+                # print('imageid =', imageid)
 
                 vis_feature = False
                 # vis_feature = True
@@ -459,11 +475,13 @@ def main(args):
                     match_idx = idx  # 1024x8, bs=16, [h, w, slice_num]
                     fig_path = os.path.join(vis_path, name) 
                     vis_match(slice_num, codebook_colors, match_idx, fig_path, image, x_recon)
-                if imageid >= debug_max:
-                    break
+                # if imageid >= debug_max:
+                #     break
         
         # debug： 用于vis_feature？
         # if imageid >= debug_max:
+        #     break
+        # if debug_cnt >= 100:
         #     break
 
     # idx = 0
@@ -536,6 +554,8 @@ if __name__ == '__main__':
     from config import load_config
 
     cfg_all = load_config.load_cfg()
-
+    f = cfg_all.get('f', 4)
+    cfg_all["f"] = f
+    print('f =', cfg_all.get('f'))
 
     main(cfg_all)

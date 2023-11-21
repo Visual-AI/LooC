@@ -4,18 +4,22 @@ vislab3_datapath = {
     'mnist':            '/disk2/jieli/datasets/mnist',
     'cifar10':          '/disk2/jieli/datasets/cifar',
     'fashion-mnist':    '/disk2/jieli/datasets/fashion-mnist',
+    'expINrec':        '/disk2/jieli/datasets/imagenet/exp_src_images',
 }
 
 vislab12_datapath = {
     'mnist':            '/data2/common/mnist',
     'cifar10':          '/data2/common/cifar',
     'fashion-mnist':    '/data2/common/fashion-mnist',
+    'expINrec':        '/data2/jieli/datasets/imagenet/exp_src_images',
+
 }
 
 vislab13_datapath = {
     'mnist':            '/home2/jieli/datasets/mnist',
     'cifar10':          '/home2/jieli/datasets/cifar',
     'fashion-mnist':    '/home2/jieli/datasets/fashion-mnist',
+    'expINrec':        '/home2/jieli/datasets/imagenet/exp_src_images',
 }
 
 
@@ -54,7 +58,7 @@ def get_yaml(cfg, flag_debug=False):
     str_list.append(f"output_folder: {cfg.get('output_folder')}")
     str_list.append(f"dataset: {cfg.get('dataset')}")
     str_list.append(f"batch_size: {cfg.get('batch_size')}")
-    str_list.append(f"num_epochs: 500       # number of epochs (default: 100)")
+    str_list.append(f"num_epochs: {cfg.get('epoch', 500)}       # number of epochs (default: 100)")
 
     str_list.append("")
     str_list.append(f"seed: 42              # seed for everything")
@@ -69,8 +73,9 @@ def get_yaml(cfg, flag_debug=False):
     
     str_list.append("")
     str_list.append(f"# model")
+    str_list.append(f"f: {cfg.get('f', 4)}")
     str_list.append(f"# Latent space")
-    str_list.append(f"hidden_size: 128        # size of the latent vectors (default: 128)")
+    str_list.append(f"hidden_size: {cfg.get('hidden_size', 128)}        # size of the latent vectors (default: 128)")
     str_list.append(f"num_residual_hidden: 32 # size of the redisual layers (default: 32)")
     str_list.append(f"num_residual_layers: 2  # number of residual layers (default: 2)")
 
@@ -582,25 +587,46 @@ def main_exp_tab4():
     cfg = dict()
     # cfg.update({"dataset": 'cifar10'})
     # cfg.update({"dataset": 'mnist'})
-    cfg.update({"dataset": 'fashion-mnist'})
+    # cfg.update({"dataset": 'fashion-mnist'})
+    cfg.update({"dataset": 'expINrec'})
     flag_debug = False                   # True for debug, False for exp
-    merge_sh = True                    # 
-    gpu_list = [6,7]                      # 
+    merge_sh = False                    # 
+    gpu_list = [7]                      # 
     cfg.update({"shuffle_scale": 0})    #
-    cfg.update({"batch_size": 512})     #
+    cfg.update({"batch_size": 4})     #
+    cfg.update({"epoch": 400})     #
 
-    vq_list = ['lorc-4']
+    # vq_list = ['lorc-4']
+    # vq_list = ['cvq']
+    vq_list = ['vq']
+
+    
+    cfg.update({"hidden_size": 64})
 
     # exp -- finddim
-    cfg.update({"exp_tag": 'tab4DiffNum'})
-    cfg.update({"output_folder": 'exps/tab4'})
+    cfg.update({"f": '8'})
+    cfg.update({"exp_tag": 'tab4DiffNum512xf8e400'})
+    cfg.update({"output_folder": 'exps/tab4Rec'})
     num = 128      # num of codebook                     # 
-    dim = 128      # dim of codebook
+    dim = 64      # dim of codebook
 
     for vq in vq_list:
         if len(vq.split('-')) == 2:
             vq, dim = vq.split('-')
-            cfg.update({"batch_size": 128})
+            # cfg.update({"batch_size": 128})
+            # cfg.update({"batch_size": 78})
+        
+        embedding_num_dim = [
+            # (   8, dim),
+            # (  16, dim),
+            # (  32, dim),
+            # (  64, dim),
+            # ( 128, dim),
+            ( 256, dim),
+            # (512, dim),
+            # ( 2048, dim),
+            # ( 4096, dim),
+        ]
 
         # embedding_num_dim = [
         #     (   8, dim),
@@ -615,12 +641,12 @@ def main_exp_tab4():
         # ]
         
         # -- part1
-        embedding_num_dim = [
-            (  32, dim),
-            ( 128, dim),
-            ( 512, dim),
-            (2048, dim),
-        ]
+        # embedding_num_dim = [
+        #     (  32, dim),
+        #     ( 128, dim),
+        #     ( 512, dim),
+        #     (2048, dim),
+        # ]
         # -- part2
         # embedding_num_dim = [
         #     (   8, dim),
@@ -780,10 +806,10 @@ if __name__ == '__main__':
     # main_exp_ffhq()
 
     # main_exp_fig1a()
-    # main_exp_tab4()
+    main_exp_tab4()
     # main_exp_tab5()
     # main_exp_tab6()
     # main_exp_usage()
-    main_exp_tab3()
+    # main_exp_tab3()
     # main_exp_cifar10()
     # main_exp_fashion_mnist()

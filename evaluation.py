@@ -108,3 +108,7 @@ if __name__ == '__main__':
     print('{:>10},{:>10},{:>10},{:>10},{:>10}'.format('l1loss', 'SSIM↑', 'PSNR↑', 'LPIPS↓', 'FID-Score↓'))
     print('{:10.4f},{:10.4f},{:10.4f},{:10.4f},{:10.4f}'.format(np.mean(l1losses), np.mean(ssims), np.mean(psnrs), np.mean(lpipses), np.mean(fid_score)))
     print('{:10.4f},{:10.4f},{:10.4f},{:10.4f}'.format(np.var(l1losses), np.var(ssims), np.var(psnrs), np.var(lpipses)))
+    print("")
+    #'l1loss↓', 'LPIPS↓', 'FID-Score↓', 'SSIM↑', 'PSNR↑']
+    print('{:>10},{:>10},{:>10},{:>10},{:>10}'.format('l1loss↓', 'LPIPS↓', 'FID-Score↓', 'SSIM↑', 'PSNR↑'))
+    print('{:10.4f},{:10.4f},{:10.4f},{:10.4f},{:10.4f}'.format(np.mean(l1losses), np.mean(lpipses), np.mean(fid_score), np.mean(ssims), np.mean(psnrs)))

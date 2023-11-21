@@ -35,7 +35,7 @@ class ResidualStack(nn.Module):
 
 
 class Encoder(nn.Module):
-    def __init__(self, in_channels, num_hiddens, num_residual_layers, num_residual_hiddens):
+    def __init__(self, in_channels, num_hiddens, num_residual_layers, num_residual_hiddens,f=4):
         super(Encoder, self).__init__()
 
         self._conv_1 = nn.Conv2d(in_channels=in_channels,
@@ -46,10 +46,22 @@ class Encoder(nn.Module):
                                  out_channels=num_hiddens,
                                  kernel_size=4,
                                  stride=2, padding=1)
-        self._conv_3 = nn.Conv2d(in_channels=num_hiddens,
+        if f==4:
+            self._conv_3 = nn.Conv2d(in_channels=num_hiddens,
                                  out_channels=num_hiddens,
                                  kernel_size=3,
                                  stride=1, padding=1)
+        elif f==8:
+            self._conv_3 = nn.Sequential(
+                nn.Conv2d(in_channels=num_hiddens,
+                                 out_channels=num_hiddens,
+                                 kernel_size=3,
+                                 stride=1, padding=1),
+                nn.Conv2d(in_channels=num_hiddens,
+                                 out_channels=num_hiddens,
+                                 kernel_size=3,
+                                 stride=2, padding=1)
+            )
         self._residual_stack = ResidualStack(in_channels=num_hiddens,
                                              num_hiddens=num_hiddens,
                                              num_residual_layers=num_residual_layers,
@@ -67,7 +79,7 @@ class Encoder(nn.Module):
 
 
 class Decoder(nn.Module):
-    def __init__(self, in_channels, num_hiddens, num_residual_layers, num_residual_hiddens, output_channels):
+    def __init__(self, in_channels, num_hiddens, num_residual_layers, num_residual_hiddens, output_channels,f=4):
         super(Decoder, self).__init__()
         
         self._conv_1 = nn.Conv2d(in_channels=in_channels,
@@ -84,11 +96,22 @@ class Decoder(nn.Module):
                                                 out_channels=num_hiddens//2,
                                                 kernel_size=4, 
                                                 stride=2, padding=1)
-        
-        self._conv_trans_2 = nn.ConvTranspose2d(in_channels=num_hiddens//2, 
+        if f==4:
+            self._conv_trans_2 = nn.ConvTranspose2d(in_channels=num_hiddens//2, 
                                                 out_channels=output_channels,
                                                 kernel_size=4, 
                                                 stride=2, padding=1)
+        elif f==8:
+            self._conv_trans_2 = nn.Sequential(
+                nn.ConvTranspose2d(in_channels=num_hiddens//2, 
+                                                out_channels=num_hiddens,
+                                                kernel_size=3, 
+                                                stride=2, padding=1),
+                nn.ConvTranspose2d(in_channels=num_hiddens, 
+                                                out_channels=output_channels,
+                                                kernel_size=4, 
+                                                stride=2, padding=1)
+            )
 
     def forward(self, inputs):
         x = self._conv_1(inputs)
@@ -104,7 +127,7 @@ class Decoder(nn.Module):
 class Model(nn.Module):
     def __init__(self, input_dim, num_hiddens, num_residual_layers, num_residual_hiddens, 
                  num_embeddings, 
-                 embedding_dim, commitment_cost=0.25, distance='l2', 
+                 embedding_dim, f=4, commitment_cost=0.25, distance='l2', 
                  anchor='closest', first_batch=False, contras_loss=True, 
                  split_type='fixed',
                  args=None):
@@ -116,15 +139,17 @@ class Model(nn.Module):
 
         print(f"decoder_in_channel = {decoder_in_channel}")
         print(f"_pre_out_channel = {_pre_out_channel}")
+        f = 4
             
         self._encoder = Encoder(input_dim, num_hiddens,
                                 num_residual_layers, 
-                                num_residual_hiddens)
+                                num_residual_hiddens,f)
         self._pre_vq_conv = nn.Conv2d(in_channels=num_hiddens, 
                                       out_channels=_pre_out_channel,
                                       kernel_size=1, 
                                       stride=1)
         vq=args.get('vq', 'lorc_old')
+
         if vq == 'vq':
             from quantizer_zoo.VQ_VAE.quantize import VectorQuantizer
             self._vq_vae = VectorQuantizer(num_embeddings, embedding_dim, commitment_cost)
@@ -160,7 +185,7 @@ class Model(nn.Module):
                                 num_hiddens, 
                                 num_residual_layers, 
                                 num_residual_hiddens,
-                                input_dim)
+                                input_dim,f)
 
     def encode(self, x):
         z_e_x = self._encoder(x)

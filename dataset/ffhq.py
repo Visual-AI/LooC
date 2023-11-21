@@ -14,6 +14,9 @@ class ImagesFolder(Dataset):
             self.images_path = self.images_path[0:60000]  # 60k
         elif split == 'val':
             self.images_path = self.images_path[0:-10000]  # 10k
+        elif split == 'all':
+            self.images_path = self.images_path
+        print(f"Got {len(self.images_path)} file in the dataset.")
 
         self.transform=transform
         self.open_mode = open_mode
@@ -22,7 +25,7 @@ class ImagesFolder(Dataset):
         if distributed:
             images_path=list(pathlib.Path(root).rglob('*.png'))
         else:
-            images_path = list(pathlib.Path(root).glob('*.png'))
+            images_path = list(pathlib.Path(root).glob('*.png')) + list(pathlib.Path(root).glob('*.JPEG'))
         return images_path
 
     def __len__(self):

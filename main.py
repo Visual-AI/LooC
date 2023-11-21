@@ -109,7 +109,7 @@ def main(args):
 
     # load dataset
     data_variance=1
-    if args.dataset in ['mnist', 'fashion-mnist', 'cifar10', 'celeba', 'imagenet', 'ffhq']:
+    if args.dataset in ['mnist', 'fashion-mnist', 'cifar10', 'celeba', 'imagenet', 'ffhq', 'expINrec']:
         transform = transforms.Compose([
             transforms.ToTensor(),
             transforms.Normalize((0.5), (0.5))
@@ -190,16 +190,33 @@ def main(args):
             test_dataset = ffhq.ImagesFolder(args.data_folder,
                 split='val', transform=transform)  # 10k
             num_channels = 3
- 
+            # ----> 截取dataset的子集
             train_dataset = data_utils.Subset(train_dataset, torch.arange(1000))  # 1k
             test_dataset  = data_utils.Subset( test_dataset, torch.arange(256))   
+
+            print("len(train_dataset)", len(train_dataset))
+            print("len(test_dataset)", len(test_dataset))
+        elif args.dataset in ['expINrec']:
+            print("Loading folder", args.data_folder)
+            transform = transforms.Compose([
+            # transforms.Resize((256,256)),
+            transforms.Resize((512,512)),
+            transforms.ToTensor(),
+            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+            ])
+            train_dataset = ffhq.ImagesFolder(args.data_folder,
+                split='all', transform=transform)  
+            test_dataset = ffhq.ImagesFolder(args.data_folder,
+                split='all', transform=transform)  
+            num_channels = 3
 
             print("len(train_dataset)", len(train_dataset))
             print("len(test_dataset)", len(test_dataset))
         # thumbnails128x128
 
         valid_dataset = test_dataset
-
+    else:
+        raise ValueError(f"dataset={args.dataset} not implemented")
     # Define the dataloaders
     print("Define the dataloaders")
     g = torch.Generator()
@@ -220,7 +237,7 @@ def main(args):
     print("Define the model")
     print("VQ =", args.get('vq', 'lorc_old'))
     model = Model(num_channels, args.hidden_size, args.num_residual_layers, args.num_residual_hidden,
-                  args.num_embedding, args.dim_embedding, args.commitment_cost, args.distance,
+                  args.num_embedding, args.dim_embedding, args.f, args.commitment_cost, args.distance,
                   args.anchor, 
                   first_batch = False,  #   args.first_batch, 
                   contras_loss= False,  #   args.contras_loss,
@@ -285,6 +302,10 @@ if __name__ == '__main__':
     #     os.makedirs(os.path.join(os.path.join(args.output_folder, 'models'), args.exp_name))
     
     Enable_Wandb = cfg_all.get('Enable_Wandb', True)
+    f = cfg_all.get('f', 4)
+    cfg_all["f"] = f
+    print('f =', cfg_all.get('f'))
+
     # Enable_Wandb = False  # debug
     if Enable_Wandb:
         # start a new wandb run to track this script
