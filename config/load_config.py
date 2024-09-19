@@ -1,11 +1,17 @@
 import argparse
 
 from omegaconf import OmegaConf
+import pdb
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Improved VQ with new codebook')
     parser.add_argument('--cfg', type=str, default='config/fashion-mnist.yaml')
+
+    # exp setting. if not set, use the setting form the yaml defined by --cfg
+    #nargs="*" 一个参数后面可以跟随任意多的值，会放到列表中
+    parser.add_argument("--loss", nargs="*", help="list of loss function name")
+    # parser.add_argument('--exp_name', type=str, default='vqvae', help='name of the output folder (default: vqvae)')
 
     # General
     # parser.add_argument('--data_folder', type=str, help='name of the data folder')
@@ -47,6 +53,11 @@ def load_cfg():
     cfg_yaml = OmegaConf.load(raw_args.cfg)         # From a YAML file
     cfg_args = OmegaConf.create(vars(raw_args))     # From parser
     cfg_all = OmegaConf.merge(cfg_yaml, cfg_args)  # Later arguments override earlier ones
+
+    # 启用parser中设置的loss
+    if raw_args.loss is not None:  # test 时为None
+        for x in raw_args.loss:
+            cfg_all.update({x: True})
 
     print(OmegaConf.to_yaml(cfg_all))
     return cfg_all

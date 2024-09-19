@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
+import pdb
 
 class Residual(nn.Module):
     def __init__(self, in_channels, num_hiddens, num_residual_hiddens):
@@ -132,13 +132,15 @@ class Model(nn.Module):
                  split_type='fixed',
                  args=None):
         super(Model, self).__init__()
-
+        self.mlp = None
         # num_hiddens == embedding_dim*slice_num 才是最终输出的dim
         decoder_in_channel = num_hiddens
         _pre_out_channel = num_hiddens
 
         print(f"decoder_in_channel = {decoder_in_channel}")
         print(f"_pre_out_channel = {_pre_out_channel}")
+        self.learnable_m_scale = args.get('learnable_m_scale', False)
+        print(f"learnable_m_scale = {self.learnable_m_scale}")
         f = 4
             
         self._encoder = Encoder(input_dim, num_hiddens,
@@ -172,12 +174,32 @@ class Model(nn.Module):
                                     #    split_type=split_type,
                                        
                                         )
+            if self.learnable_m_scale:  # default self.mlp = None
+                # self.mlp = nn.Linear(_pre_out_channel, _pre_out_channel // embedding_dim)
+
+                self.mlp = nn.Conv2d(in_channels=_pre_out_channel, 
+                                      out_channels=_pre_out_channel // embedding_dim,
+                                      kernel_size=1, 
+                                      stride=1,
+                                      bias=False
+                                      )
+                self.codebook_embedding_dim = embedding_dim
+                print(f"self.mlp: in_dim = {_pre_out_channel}, out_dim = {_pre_out_channel // embedding_dim}")
+
         elif vq == 'lorc_old':    
             from code_backup.quantise import EfficientVectorQuantiser
             self._vq_vae = EfficientVectorQuantiser(num_embeddings, embedding_dim, commitment_cost, distance=distance, 
                                        anchor=anchor, first_batch=first_batch, contras_loss=contras_loss,
                                        split_type=split_type,
                                        args=args)
+        elif vq == 'pq':    
+            from quantizer_zoo.PQ.quantise import ProductQuantizer
+            feature_channel = 128
+            total_num_embeddings = num_embeddings
+            m = feature_channel // embedding_dim
+            # num_e = total_num_embeddings
+            num_e = total_num_embeddings // m
+            self._vq_vae = ProductQuantizer(feature_channel, num_e, embedding_dim)
         else:
             raise NotImplementedError(f"{vq} not ImplementedError")
         
@@ -196,6 +218,12 @@ class Model(nn.Module):
     def forward(self, x):
         z = self._encoder(x)
         z = self._pre_vq_conv(z)
+        if self.mlp is not None:
+            scale_factor = self.mlp(z)
+            scale_factor = torch.tanh(scale_factor)
+            bs, c, h, w = z.shape            
+            z_scaled = z.view(bs, c//self.codebook_embedding_dim, self.codebook_embedding_dim, h, w) * scale_factor.unsqueeze(dim=2)
+            z = z_scaled.view(z.shape)  
         # quantized, loss, (perplexity, encodings, _, bincount) = self._vq_vae(z)
         quantized, loss, (encoding_indices, bincount) = self._vq_vae(z)
         x_recon = self._decoder(quantized)

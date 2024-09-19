@@ -13,8 +13,9 @@ from fid_score import calculate_fid_given_paths
 
 parser = argparse.ArgumentParser(description='Image quality evaluations on the dataset')
 parser.add_argument('--cfg', type=str, default='')  # config/fashion-mnist.yaml
-
+parser.add_argument('--dims', type=int, default=2048, help='feature dim of the inception during calc the fid score')  
 parser.add_argument('--gt_path', type=str, default='../results/', help='path to original gt data')
+parser.add_argument('--exp_name', type=str, default='')
 parser.add_argument('--g_path', type=str, default='../results/', help='path to the generated data')
 parser.add_argument('--num_test', type=int, default=0, help='how many examples to load for testing')
 # parser.add_argument('--use_gpu', action='store_true', help='turn on flag to use GPU')
@@ -27,15 +28,28 @@ lpips_vgg = lpips.LPIPS(net='vgg')
 # cfg_all = load_config.load_cfg()
 if args.cfg != '':
     cfg_yaml = OmegaConf.load(args.cfg)         # From a YAML file
+    if args.exp_name == '':
+        exp_name = cfg_yaml.exp_name
+    else:
+        exp_name = args.exp_name
     args = cfg_yaml
-    args.gt_path = os.path.join(cfg_yaml.output_folder, 'results', cfg_yaml.exp_name, 'original')
-    args.g_path = os.path.join(cfg_yaml.output_folder, 'results', cfg_yaml.exp_name, 'rec')
+    print(f"evaluate exp_name = {exp_name}")
+
+    # results_path = os.path.join(args.output_folder, 'results', args.exp_name)
+    args.gt_path = os.path.join(cfg_yaml.output_folder, 'results', exp_name, 'original')
+    args.g_path = os.path.join(cfg_yaml.output_folder, 'results', exp_name, 'rec')
 
 # args.gt_path = '/home/jieli/proj/VAE/exps/exp_1101/output/results/mnist_cos_closest_8192x4/best.pt/original'
 # args.g_path = '/home/jieli/proj/VAE/exps/exp_1101/output/results/mnist_cos_closest_8192x4/best.pt/rec'
 
 print('args.gt_path', args.gt_path)
 print('args.g_path', args.g_path)
+try:
+    print('fid: args.get(dims)', args.get("dims", 2048))
+    dims = args.get("dims", 2048)
+except:
+    print('fid: args.dims', args.dims)
+    dims = args.dims
 
 args.use_gpu = True if torch.cuda.is_available() else False
 
@@ -103,7 +117,9 @@ if __name__ == '__main__':
     print('{:10.4f},{:10.4f},{:10.4f},{:10.4f}'.format(np.mean(l1losses), np.mean(ssims), np.mean(psnrs), np.mean(lpipses)))
     
     print("calculate_fid ...")
-    fid_score = calculate_fid_given_paths([args.gt_path, args.g_path], batch_size=50, cuda=True, dims=2048)
+    # fid_score = calculate_fid_given_paths([args.gt_path, args.g_path], batch_size=50, cuda=True, dims=args.get("dims", 2048))  # , dims=2048
+    fid_score = calculate_fid_given_paths([args.gt_path, args.g_path], batch_size=50, cuda=True, dims=dims)  # , dims=2048
+
 
     print('{:>10},{:>10},{:>10},{:>10},{:>10}'.format('l1loss', 'SSIM↑', 'PSNR↑', 'LPIPS↓', 'FID-Score↓'))
     print('{:10.4f},{:10.4f},{:10.4f},{:10.4f},{:10.4f}'.format(np.mean(l1losses), np.mean(ssims), np.mean(psnrs), np.mean(lpipses), np.mean(fid_score)))

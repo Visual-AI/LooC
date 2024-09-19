@@ -54,9 +54,11 @@ def train(data_loader, model, optimizer, run_steps, data_variance=1):
             wandb.log({
                 "loss_recons": loss_recons, 
                 "loss_vq": loss_vq,
-                "loss_sim": loss_vq_dict.get('sim_loss'), 
-                'sim_max': loss_vq_dict.get('sim_max'),
-                'sim_row_max_val': loss_vq_dict.get('sim_row_max_val'),
+                "uniform_loss": loss_vq_dict.get('uniform_loss'), 
+                "leaky_uniform_loss": loss_vq_dict.get('leaky_uniform_loss'), 
+                # "loss_sim": loss_vq_dict.get('sim_loss'), 
+                # 'sim_max': loss_vq_dict.get('sim_max'),
+                # 'sim_row_max_val': loss_vq_dict.get('sim_row_max_val'),
                 })
 
         # writer.add_scalar('loss/train/perplexity', perplexity.item(), args.steps)
@@ -178,6 +180,7 @@ def main(args):
             print("len(train_dataset)", len(train_dataset))
             print("len(test_dataset)", len(test_dataset))
 
+        # 仅用于调试，FFHQ的实验在VQGAN的框架下进行
         elif args.dataset == 'ffhq':
             print("Loading ffhq")
             transform = transforms.Compose([

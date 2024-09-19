@@ -22,6 +22,13 @@ vislab13_datapath = {
     'expINrec':        '/home2/jieli/datasets/imagenet/exp_src_images',
 }
 
+vislab_gate_datapath = {
+    'mnist':            '/home/vislab/jieli23/dataset/mnist',
+    'cifar10':          '/home/vislab/jieli23/dataset/cifar',
+    'fashion-mnist':    '/home/vislab/jieli23/dataset/fashion-mnist',
+    'expINrec':        '/home/vislab/jieli23/dataset/imagenet/exp_src_images',
+}
+
 
 def get_datapath(dataset_name):
     dataset_path = vislab3_datapath.get(dataset_name)
@@ -33,6 +40,10 @@ def get_datapath(dataset_name):
         return dataset_path
     
     dataset_path = vislab13_datapath.get(dataset_name)
+    if os.path.exists(dataset_path):
+        return dataset_path
+    
+    dataset_path = vislab_gate_datapath.get(dataset_name)
     if os.path.exists(dataset_path):
         return dataset_path
 
@@ -801,15 +812,47 @@ def main_exp_usage():
         cfg.update({"vq": vq})          # VQ method
         main_exp_base(cfg, embedding_num_dim, gpu_list, merge_sh, flag_debug)
 
+
+
+def main_exp_pq():
+    # exp -- different shuffle
+    # dataset
+    # shuffle_scale
+    # dim
+    # shuffle_scale_list = [0, 2, 3, 4]  # 256x128x0, 则为CVQ相同的方法. 区别是num1024 --> 256,预期指标比CVQ略低
+    # TODO CVQ: 1024 * 128 *0 -->1024 * 128 *2 是否有提升
+
+    cfg = dict()
+    cfg.update({"dataset": 'cifar10'})
+    # cfg.update({"dataset": 'mnist'})
+    # cfg.update({"dataset": 'fashion-mnist'})
+    flag_debug = False                   # True for debug, False for exp
+    merge_sh = False                    # 
+    
+    cfg.update({"batch_size": 128})     #
+    cfg.update({"vq": 'pq'})          # VQ method
+    cfg.update({"exp_tag": 'expPQ'})
+    cfg.update({"output_folder": 'exps/tab_pq'})
+    cfg.update({"shuffle_scale": 0}) 
+    num = 1024      # num of codebook  
+
+    # ---
+    gpu_list = [0]
+    # embedding_num_dim = [(num,  8)]
+    embedding_num_dim = [(256,  4)]
+    main_exp_base(cfg, embedding_num_dim, gpu_list, merge_sh, flag_debug)
+
+
 if __name__ == '__main__':
     # main_exp_imagenet()
     # main_exp_ffhq()
 
     # main_exp_fig1a()
-    main_exp_tab4()
+    # main_exp_tab4()
     # main_exp_tab5()
     # main_exp_tab6()
     # main_exp_usage()
     # main_exp_tab3()
     # main_exp_cifar10()
     # main_exp_fashion_mnist()
+    main_exp_pq()

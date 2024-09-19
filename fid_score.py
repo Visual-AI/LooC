@@ -79,6 +79,9 @@ def get_activations(files, model, batch_size=50, dims=2048, cuda=False):
        activations of the given tensor when feeding inception with the
        query tensor.
     """
+    # limits = 10000  # 10k
+    # files = files[0:limits]
+
     model.eval()
 
     if batch_size > len(files):
@@ -193,7 +196,18 @@ def calculate_activation_statistics(files, model, batch_size=50, dims=2048,
 
 
 def _compute_statistics_of_path(path, model, batch_size, dims, cuda):
-    if path.endswith('.npz'):
+    if isinstance(path, list):
+        files = []
+        for i_path in path:
+            i_path = pathlib.Path(i_path)
+            i_files = list(i_path.glob('*.jpg')) + list(i_path.glob('*.png')) + list(i_path.glob('*.JPEG'))+ list(i_path.glob('*.jpeg')) + list(i_path.glob('*.webp'))
+            files += i_files
+            print(f"Get {len(i_files)} files")
+        print(f"Get {len(files)} files in total")
+        m, s = calculate_activation_statistics(files, model, batch_size,
+                                               dims, cuda)
+
+    elif path.endswith('.npz'):
         f = np.load(path)
         m, s = f['mu'][:], f['sigma'][:]
         f.close()
@@ -203,7 +217,8 @@ def _compute_statistics_of_path(path, model, batch_size, dims, cuda):
                                                dims, cuda)
     else:
         path = pathlib.Path(path)
-        files = list(path.glob('*.jpg')) + list(path.glob('*.png')) + list(path.glob('*.JPEG'))+ list(path.glob('*.jpeg'))
+        files = list(path.glob('*.jpg')) + list(path.glob('*.png')) + list(path.glob('*.JPEG'))+ list(path.glob('*.jpeg')) + list(path.glob('*.webp'))
+        print(f"Get {len(files)} files")
         m, s = calculate_activation_statistics(files, model, batch_size,
                                                dims, cuda)
 
@@ -213,8 +228,13 @@ def _compute_statistics_of_path(path, model, batch_size, dims, cuda):
 def calculate_fid_given_paths(paths, batch_size, cuda, dims):
     """Calculates the FID of two paths"""
     for p in paths:
-        if not os.path.exists(p):
-            raise RuntimeError('Invalid path: %s' % p)
+        if isinstance(p, list):
+            for i_p in p:
+                if not os.path.exists(i_p):
+                    raise RuntimeError('Invalid path: %s' % i_p)
+        else:
+            if not os.path.exists(p):
+                raise RuntimeError('Invalid path: %s' % p)
 
     block_idx = InceptionV3.BLOCK_INDEX_BY_DIM[dims]
 
@@ -243,5 +263,113 @@ def main():
     print('FID: ', fid_value)
 
 
+def main_lsun_churches(dims=2048):
+    # args = parser.parse_args()
+    os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+    # path_gt = '/home/vislab/jieli23/dataset/LSUN/churches_val'
+    path_gt = '/home/vislab/jieli23/dataset/LSUN/churches_train'  # Get 126227 files
+    print(path_gt)
+    path_pd = [
+        '/home/vislab/jieli23/proj/latent-diffusion/logs/lsun_churches256/samples/00500000/2023-11-15-20-21-20/img',
+        '/home/vislab/jieli23/proj/latent-diffusion/logs/lsun_churches256/samples/00500000/2023-11-15-20-42-15/img',
+        '/home/vislab/jieli23/proj/latent-diffusion/logs/lsun_churches256/samples/00500000/2023-11-15-20-52-03/img',
+        '/home/vislab/jieli23/proj/latent-diffusion/logs/lsun_churches256/samples/00500000/2023-11-15-20-55-45/img',
+        '/home/vislab/jieli23/proj/latent-diffusion/logs/lsun_churches256/samples/00500000/2023-11-15-21-08-20/img',
+        '/home/vislab/jieli23/proj/latent-diffusion/logs/lsun_churches256/samples/00500000/2023-11-17-00-26-21/img',
+        ]
+    
+    fid_value = calculate_fid_given_paths([path_gt, path_pd], batch_size=50, cuda=True, dims=dims)
+
+    print('FID: ', fid_value)
+
+
+def main_lsun_bedroom(dims=2048):
+    # args = parser.parse_args()
+    os.environ['CUDA_VISIBLE_DEVICES'] = '3'
+
+    # path_gt = '/home/vislab/jieli23/proj/latent-diffusion/data_LSUN/bedrooms_val'
+    path_gt = '/home/vislab/jieli23/proj/latent-diffusion/data_LSUN/bedrooms_train'
+    print(path_gt)
+    path_pd = [
+        '/home/vislab/jieli23/proj/latent-diffusion/logs/lsun_beds256/samples/01900000/2023-11-15-22-03-02/img',
+        '/home/vislab/jieli23/proj/latent-diffusion/logs/lsun_beds256/samples/01900000/2023-11-17-00-27-45/img',
+        ]
+    
+    fid_value = calculate_fid_given_paths([path_gt, path_pd], batch_size=50, cuda=True, dims=dims) # dims=2048
+
+    print('FID: ', fid_value)
+    return fid_value
+
+
+
+
+def main_imagenet(dims=2048):
+    path_pairs = [
+        ('/home/vislab/jieli23/dataset/ImageNet/train/n01443537',  # 1 goldfish
+         ['/home/vislab/jieli23/proj/latent-diffusion/logs/imagenet_gen/20231117_0044_goldfish',
+        '/home/vislab/jieli23/proj/latent-diffusion/logs/imagenet_gen/20231118_0359_goldfish',]),
+
+        ('/home/vislab/jieli23/dataset/ImageNet/train/n02007558', # flamingo
+         ['/home/vislab/jieli23/proj/latent-diffusion/logs/imagenet_gen/20231117_0044_flamingo',
+        '/home/vislab/jieli23/proj/latent-diffusion/logs/imagenet_gen/20231118_0359_flamingo', ]),
+
+        ('/home/vislab/jieli23/dataset/ImageNet/train/n02793495', # barn 木屋
+         ['/home/vislab/jieli23/proj/latent-diffusion/logs/imagenet_gen/20231118_0359_barn', 
+        '/home/vislab/jieli23/proj/latent-diffusion/logs/imagenet_gen/20231117_0044_425_barn', ]),
+
+        ('/home/vislab/jieli23/dataset/ImageNet/train/n02088364',  # 162
+         ['/home/vislab/jieli23/proj/latent-diffusion/logs/imagenet_gen/20231117_0044_beagle']),
+
+        ('/home/vislab/jieli23/dataset/ImageNet/train/n02690373',  # #404 n02690373 飞机, airliner
+         ['/home/vislab/jieli23/proj/latent-diffusion/logs/imagenet_gen/20231118_0359_airliner',
+         '/home/vislab/jieli23/proj/latent-diffusion/logs/imagenet_gen/20231117_0044_404_airliner']),
+
+        ('/home/vislab/jieli23/dataset/ImageNet/train/n03388043',  # # 562 n03388043 喷泉, fountain
+         ['/home/vislab/jieli23/proj/latent-diffusion/logs/imagenet_gen/20231117_0044_562_fountain']),
+
+        ('/home/vislab/jieli23/dataset/ImageNet/train/n03944341',  # #723 n03944341 风车, pinwheel
+         ['/home/vislab/jieli23/proj/latent-diffusion/logs/imagenet_gen/20231117_0044_723_pinwheel']),
+
+        ('/home/vislab/jieli23/dataset/ImageNet/train/n02951358',  # 472 n02951358 艇, canoe
+         ['/home/vislab/jieli23/proj/latent-diffusion/logs/imagenet_gen/20231118_0359_canoe']),
+
+        ('/home/vislab/jieli23/dataset/ImageNet/train/n01983481',  # # 122 n01983481 龙虾
+         ['/home/vislab/jieli23/proj/latent-diffusion/logs/imagenet_gen/20231117_0044_lobster']),
+
+        ('/home/vislab/jieli23/dataset/ImageNet/train/n03063689',  # # 505 n03063689 壶, coffeepot
+         ['/home/vislab/jieli23/proj/latent-diffusion/logs/imagenet_gen/20231118_0359_coffeepot']),
+
+        ('/home/vislab/jieli23/dataset/ImageNet/train/n02917067',  # 466 n02917067 火车, bullet train
+         ['/home/vislab/jieli23/proj/latent-diffusion/logs/imagenet_gen/20231118_0359_train']),
+
+        ('/home/vislab/jieli23/dataset/ImageNet/train/n02094433',  # # 187 n02094433 狗, Yorkshire
+         ['/home/vislab/jieli23/proj/latent-diffusion/logs/imagenet_gen/20231117_0044_Yorkshire']),
+
+        ('/home/vislab/jieli23/dataset/ImageNet/train/n02791124',  # #423 n02791124 座椅, barber chair
+         ['/home/vislab/jieli23/proj/latent-diffusion/logs/imagenet_gen/20231117_0044_423_chair']),
+
+        ('/home/vislab/jieli23/dataset/ImageNet/train/n02206856',  # # 309 n02206856 昆虫, bee
+         ['/home/vislab/jieli23/proj/latent-diffusion/logs/imagenet_gen/20231117_0044_309_bee']),
+        ]
+
+    fid_list = []      
+    for (path_gt, path_pd) in path_pairs:
+        print(path_gt)
+        fid_value = calculate_fid_given_paths([path_gt, path_pd], batch_size=50, cuda=True, dims=dims) # dims=2048
+        fid_list.append(fid_value)
+        print(path_gt, 'FID: ', fid_value)
+    print('fid_list:', fid_list)
+    print('np.mean(fid_list)', np.mean(fid_list))
+    # fid_list: [55.09653374833647, 21.676210392918776, 51.27497036504026, 47.820892051648, 25.52898850993971, 102.67117892805487, 67.32319412340098, 37.402514645340915, 69.91617139179648, 66.09961551569492, 30.911759833869212, 47.70241358214308, 75.32849301266714, 40.600822867132564]
+    # np.mean(fid_list) 52.810982783427384
+
+
+
 if __name__ == '__main__':
-    main()
+    # main()
+    # main_lsun_churches(dims=2048)    # dims=2048 val FID 48.834283581597646
+    # main_lsun_bedroom(dims=768)   # dims=768, val FID:  0.3902569525049815
+    main_lsun_bedroom(dims=2048)   # dims=2048  val FID:  73.50275058421803
+    # main_imagenet(dims=2048)
+    # python fid_score.py /home/vislab/jieli23/proj/latent-diffusion/logs/lsun_churches256/samples/00500000/2023-11-15-20-21-20/img /home/vislab/jieli23/dataset/LSUN/churches_val --batch-size 50  --gpu 0 --dims 2048
+    # python fid_score.py 

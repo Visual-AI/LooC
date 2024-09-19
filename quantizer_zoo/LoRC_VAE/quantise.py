@@ -12,8 +12,7 @@ vq_args = {
     "anchor": 'probrandom',
     "split_type": 'fixed',
 
-    "sim_loss": 0,
-    "shuffle_scale": 2,
+    "shuffle_scale": 0,
 
     "contras_loss": False,
     "scale_sim_loss": 0, 
@@ -23,6 +22,13 @@ vq_args = {
 
 }
 
+
+# 让 codevector 两两之间的距离越远越好。
+def uniform_loss(x, t=2):
+   return torch.pdist(x, p=2).pow(2).mul(-t).exp().mean().log()
+
+def leaky_uniform_loss(x, t=2):
+   return -(1 - torch.pdist(x, p=2).pow(2).mul(-t).exp()).log().mean()
 
 class VectorQuantizer(nn.Module):
     """
@@ -51,9 +57,12 @@ class VectorQuantizer(nn.Module):
         self.beta = beta
         self.distance = args.get('distance')
         self.anchor = args.get('anchor')
-        self.contras_loss = args.get('contras_loss')
-        self.scale_sim_loss = args.get('scale_sim_loss')
+        self.contras_loss = args.get('contras_loss', False)
+        self.scale_sim_loss = args.get('scale_sim_loss', 0)
         self.return_loss_dict = args.get('return_loss_dict', True)
+
+        self.uniform_loss = args.get('uniform_loss', False)
+        self.leaky_uniform_loss = args.get('leaky_uniform_loss', False)
         
 
         if self.scale_sim_loss == 0:
@@ -64,7 +73,6 @@ class VectorQuantizer(nn.Module):
         # --
         self.split_type = args.get('split_type')
         self.decay = 0.99
-        self.scale_sim_loss= args.get('sim_loss', 0)
         self.shuffle_scale = args.get('shuffle_scale', 0)
 
         self.pool = FeaturePool(self.embed_num, self.embed_dim)
@@ -77,6 +85,9 @@ class VectorQuantizer(nn.Module):
         print(f"anchor = {self.anchor}")
         print(f"self.scale_sim_loss = {self.scale_sim_loss}")
         print(f"self.calc_sim_loss = {self.calc_sim_loss}")
+        print(f"self.uniform_loss = {self.uniform_loss}")
+        print(f"self.leaky_uniform_loss = {self.leaky_uniform_loss}")
+        print(f"self.contras_loss = {self.contras_loss}")
         print("self.training =", self.training)
         print("self.shuffle_scale =", self.shuffle_scale)
         print("---> Looc VQ VectorQuantizer: init success.")
@@ -299,7 +310,7 @@ class VectorQuantizer(nn.Module):
             
             # contrastive loss
             if self.contras_loss:
-                sort_distance, indices = dist.sort(dim=0)  # FIX 无需重复计算
+                sort_distance, indices = dist.sort(dim=0)  # FIX 无需重复计算 
                 dis_pos = sort_distance[-max(1, int(sort_distance.size(0)/self.embed_num)):,:].mean(dim=0, keepdim=True)
                 dis_neg = sort_distance[:int(sort_distance.size(0)*1/2),:]
                 dis = torch.cat([dis_pos, dis_neg], dim=0).t() / 0.07         # 为什么 /0.07?
@@ -311,16 +322,20 @@ class VectorQuantizer(nn.Module):
             # codebook的每个entry之间尽可能正交
             # 计算两两的相似度
             if self.calc_sim_loss:
-                cos_sim = 0.5 + 0.5 * torch.matmul(normed_codebook, normed_codebook.t())
+                
+                cos_sim = torch.matmul(normed_codebook, normed_codebook.t())
+                # cos_sim = 0.5 + 0.5 * cos_sim  # [-1, 1] --> [0, 1],  注意，此时相同的元素的相似度≠1，而是=0.5
                 # cos_sim 按列求和，含义为：该entry 与其他entry的相似度之和
                 # cos_sim 按列求max，含义为：该entry 与其他entry的相似度最大的值
 
                 # import pdb
                 # pdb.set_trace()
+                # ---- 一些信息记录
                 diag = torch.diag(cos_sim)  # 取对角线元素，输出为 1*N
                 sim_diag = torch.diag_embed(diag)   # 由 diag 恢复为N*N
                 sim_masked = cos_sim - sim_diag     # cos_sim 对角线置 0
-
+                # sim_masked = cos_sim.fill_diagonal_(float(0))  # 对角线置 0
+                #
                 sim_sum_each_row = torch.sum(sim_masked, dim=1)  # 每一行内的元素相加
                 sim_row_max_val = torch.max(sim_sum_each_row)        # 相似度之和的最大值   
                 # sim_row_max_idx = torch.argmax(sim_sum_each_row)     # 相似度之和的最大值的索引   
@@ -331,7 +346,9 @@ class VectorQuantizer(nn.Module):
                 loss_dict.update({'sim_row_max_val': sim_row_max_val})
 
                 # 去掉对角线上自相似度==1的元素
-                sim_loss = (torch.sum(cos_sim) - embed_num) / (embed_num * (embed_num - 1))  # sim_loss值在0.5 左右
+                # sim_loss = (torch.sum(cos_sim) - embed_num) / (embed_num * (embed_num - 1))  # sim_loss值在0.5 左右
+
+                sim_loss = (torch.sum(abs(cos_sim)) - embed_num) / (embed_num * (embed_num - 1))  # sim_loss值在0.5 左右
 
                 if self.scale_sim_loss:  # 若scale==0，则仅记录，不参与训练
                     loss += self.scale_sim_loss * sim_loss
@@ -343,6 +360,15 @@ class VectorQuantizer(nn.Module):
                 # torch.min(cos_sim)
                 # torch.min(cos_sim2)
                 # torch.max(cos_sim2)
+            if self.uniform_loss:
+                _uniform_loss = 0.1 * uniform_loss(normed_codebook, t=2)
+                loss += _uniform_loss
+                loss_dict.update({'uniform_loss': _uniform_loss}) 
+            
+            if self.leaky_uniform_loss:
+                _leaky_uniform_loss = leaky_uniform_loss(normed_codebook, t=2)
+                loss += _leaky_uniform_loss
+                loss_dict.update({'leaky_uniform_loss': _leaky_uniform_loss})
 
         # perplexity = None       # TODO 
         # return z_q, loss, (perplexity, min_encodings, encoding_indices, bin_count)
