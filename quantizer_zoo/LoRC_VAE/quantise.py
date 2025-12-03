@@ -6,6 +6,8 @@ import random
 from torch import einsum
 from einops import rearrange
 from icecream import ic 
+import pdb
+
 
 vq_args = {
     "distance": 'cos',
@@ -21,6 +23,16 @@ vq_args = {
 
 
 }
+
+def sim_matrix(a, b, eps=1e-8):
+    """
+    added eps for numerical stability
+    """
+    a_n, b_n = a.norm(dim=1)[:, None], b.norm(dim=1)[:, None]
+    a_norm = a / torch.clamp(a_n, min=eps)
+    b_norm = b / torch.clamp(b_n, min=eps)
+    sim_mt = torch.mm(a_norm, b_norm.transpose(0, 1))
+    return sim_mt
 
 
 # 让 codevector 两两之间的距离越远越好。
@@ -64,11 +76,16 @@ class VectorQuantizer(nn.Module):
         self.uniform_loss = args.get('uniform_loss', False)
         self.leaky_uniform_loss = args.get('leaky_uniform_loss', False)
         
+        self.init_on_the_fly = False
 
         if self.scale_sim_loss == 0:
             self.calc_sim_loss= args.get('calc_sim_loss', False)
         else:
             self.calc_sim_loss= args.get('calc_sim_loss', True)
+
+        self.random_skip_vq = args.get('random_skip_vq', 0)  # training
+
+        self.on_the_fly_inference = False
 
         # --
         self.split_type = args.get('split_type')
@@ -90,8 +107,30 @@ class VectorQuantizer(nn.Module):
         print(f"self.contras_loss = {self.contras_loss}")
         print("self.training =", self.training)
         print("self.shuffle_scale =", self.shuffle_scale)
+        print("self.return_loss_dict =", self.return_loss_dict)
+        print("self.random_skip_vq =", self.random_skip_vq)
+        print("self.on_the_fly_inference =", self.on_the_fly_inference)
         print("---> Looc VQ VectorQuantizer: init success.")
 
+    def init_on_the_fly_embedding(self):
+        codebook = self.embedding.weight
+        if self.distance == 'cos':
+            normed_codebook = F.normalize(codebook, dim=1)
+            codebook = normed_codebook
+
+        pdist_l1 = torch.pdist(codebook, p=1)
+        self.min_pdist_l1 = torch.min(pdist_l1)
+        self.max_pdist_l1 = torch.max(pdist_l1)
+        self.mean_pdist_l1 = torch.mean(pdist_l1)
+
+        pdist_l2 = torch.pdist(codebook, p=2)
+        self.min_pdist_l2 = torch.min(pdist_l2)
+        self.max_pdist_l2 = torch.max(pdist_l2)
+        self.mean_pdist_l2 = torch.mean(pdist_l2)
+        self.init_on_the_fly = True
+        print("init_on_the_fly_embedding success")
+
+        
 
     def upsample(self, x, scale_factor=2):
         # N,C,H_in,W_in --> N,C,H_in*scale_factor,W_in*scale_factor
@@ -145,14 +184,47 @@ class VectorQuantizer(nn.Module):
         # TODO: ablation studyfix random,# 随机确定切分的索引，然后每一次forward都采用同样的切分方式
 
         return z_flattened
+    
+    def forward(self, z):
+        if not self.training and not self.init_on_the_fly:
+            self.init_on_the_fly_embedding()
+
+        if not isinstance(z, list):
+            return self._forward(z)
+       
+        z_q_list = []
+        out_loss_list = []
+        for zi in z:
+            z_q_i, out_loss_i, (encoding_indices, bin_count) = self._forward(zi)
+            z_q_list.append(z_q_i)
+            out_loss_list.append(out_loss_i)
+        z_q = sum(z_q_list)  # element-wise add.
+
+        # Done: merge loss
+        if self.return_loss_dict:
+            out_loss = {}
+            for _key in out_loss_list[0]:
+                _v = out_loss_list[0].get(_key)
+                for dict_i in out_loss_list[1:]:
+                    _v += dict_i.get(_key)
+                out_loss.update({_key: _v})
+        else:
+            out_loss = sum(out_loss_list)
+        
+        # TODO merge (encoding_indices, bin_count)
+
+        return z_q, out_loss, (encoding_indices, bin_count)
 
 
-    def forward(self, z, temp=None, rescale_logits=False, return_logits=False):
+    def _forward(self, z, temp=None, rescale_logits=False, return_logits=False):
         assert temp is None or temp==1.0, "Only for interface compatible with Gumbel"
         assert rescale_logits==False, "Only for interface compatible with Gumbel"
         assert return_logits==False, "Only for interface compatible with Gumbel"
 
         # ic('quantise->z.shape: ', z.shape)  # bs * C * 16 * 16
+
+        # on-the-fly-inference 的阈值，若相似度小于该阈值，则视为 outlier，此时跳过该 vector 的 VQ
+        t_min_sim = 0.8  # arccos(0.7) = 45deg
 
         if self.shuffle_scale:
             z = self.upsample(z, scale_factor=self.shuffle_scale)
@@ -188,6 +260,14 @@ class VectorQuantizer(nn.Module):
             dist = torch.einsum('bd,dn->bn', normed_z_flattened, rearrange(normed_codebook, 'n d -> d n'))  # [bs * h * w * slice_num, embed_num], # [1024*8*8*16=1048576, 4096]  # embed_num=4096, embed_dim=8, 300M
             encoding_indices = torch.argmax(dist, dim=1)
             encoding_indices_dim0 = torch.argmax(dist, dim=0)
+            if not self.training and self.on_the_fly_inference:
+                mindist, encoding_indices = torch.max(dist, dim=1)  # max_similary
+                res = mindist < t_min_sim  # arccos(0.7) = 45deg
+                res_num = res.float().sum()
+                if res_num > 0:
+                    # raise ValueError(f"res_num = {res_num}")
+                    print(f"res_num = {res_num}")
+            # pdb.set_trace()
         # ic("self.distance = ", self.distance)
         # ic(encoding_indices.shape, encoding_indices_dim0.shape)
         # TODO 改进dist
@@ -216,7 +296,23 @@ class VectorQuantizer(nn.Module):
         # z_q = torch.matmul(encodings, self.embedding.weight).view(z.shape)  
         z_q = embed_weight[encoding_indices, :] # num, dim
 
-        z_q = z_q.view(z.shape)  
+        if not self.training and self.on_the_fly_inference: #  and res_num > 0:
+            # pdb.set_trace()
+            # res = mindist < t_min_sim
+            z_q[res, :] = z_flattened[res, :]
+
+        # 若将 random_skip_vq 放在此处，则 vq loss=0
+        # if self.training and self.random_skip_vq: # and random.random() < self.random_skip_vq:
+        #     # pdb.set_trace()
+        #     # --- skip a batch
+        #     # if random.random() < self.random_skip_vq:
+        #     #     z_q = z  # skip the vq
+
+        #     # --- skip several samples in each batch
+        #     skip_idx = torch.rand(z_q.shape[0]) < self.random_skip_vq
+        #     z_q[skip_idx, :]  = z_flattened[skip_idx, :]
+
+        z_q = z_q.view(z.shape)
 
         # TODO： 使用dict 进行返回loss
         # sim_loss = None
@@ -228,6 +324,16 @@ class VectorQuantizer(nn.Module):
         loss_q = torch.mean((z_q - z.detach()) ** 2)  # loss_quant
         loss = self.beta * loss_z + loss_q
         loss_dict.update({'loss_z': loss_z, 'loss_q': loss_q})
+
+        if self.training and self.random_skip_vq: # and random.random() < self.random_skip_vq:
+            z_q = z_q.view(-1, embed_dim)
+            # --- skip a batch
+            # if random.random() < self.random_skip_vq:
+            #     z_q = z  # skip the vq
+            # --- skip several samples in each batch
+            skip_idx = torch.rand(z_q.shape[0]) < self.random_skip_vq
+            z_q[skip_idx, :]  = z_flattened[skip_idx, :]
+            z_q = z_q.view(z.shape)
 
         # preserve gradients
         z_q = z + (z_q - z).detach()

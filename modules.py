@@ -140,7 +140,8 @@ class Model(nn.Module):
         print(f"decoder_in_channel = {decoder_in_channel}")
         print(f"_pre_out_channel = {_pre_out_channel}")
         self.learnable_m_scale = args.get('learnable_m_scale', False)
-        print(f"learnable_m_scale = {self.learnable_m_scale}")
+        self.vq_num = args.get('vq_num', 1)
+        print(f"learnable_m_scale = {self.learnable_m_scale}, self.vq_num={self.vq_num}")
         f = 4
             
         self._encoder = Encoder(input_dim, num_hiddens,
@@ -151,6 +152,7 @@ class Model(nn.Module):
                                       kernel_size=1, 
                                       stride=1)
         vq=args.get('vq', 'lorc_old')
+        self.use_normed_z = args.get('use_normed_z', False)
 
         if vq == 'vq':
             from quantizer_zoo.VQ_VAE.quantize import VectorQuantizer
@@ -175,16 +177,56 @@ class Model(nn.Module):
                                        
                                         )
             if self.learnable_m_scale:  # default self.mlp = None
-                # self.mlp = nn.Linear(_pre_out_channel, _pre_out_channel // embedding_dim)
-
+                # num of scale_factor = m
+                # self.mlp = nn.Conv2d(in_channels=_pre_out_channel, 
+                #                       out_channels=_pre_out_channel // embedding_dim,
+                #                       kernel_size=1, 
+                #                       stride=1,
+                #                       bias=False
+                #                       )
+                # num of scale_factor = d
                 self.mlp = nn.Conv2d(in_channels=_pre_out_channel, 
-                                      out_channels=_pre_out_channel // embedding_dim,
+                                      out_channels=_pre_out_channel,
                                       kernel_size=1, 
                                       stride=1,
                                       bias=False
                                       )
+            if self.vq_num >= 2:
                 self.codebook_embedding_dim = embedding_dim
                 print(f"self.mlp: in_dim = {_pre_out_channel}, out_dim = {_pre_out_channel // embedding_dim}")
+
+                # self.get_alpha = nn.Conv2d(in_channels=_pre_out_channel, 
+                #                       out_channels=_pre_out_channel,
+                #                       kernel_size=1, 
+                #                       stride=1,
+                #                       bias=False
+                #                       )
+                self.get_alpha_1 = nn.Conv2d(in_channels=_pre_out_channel, 
+                                      out_channels=_pre_out_channel,
+                                      kernel_size=1, 
+                                      stride=1,
+                                      bias=False
+                                      )
+                self.get_alpha_2 = nn.Conv2d(in_channels=_pre_out_channel, 
+                                      out_channels=_pre_out_channel,
+                                      kernel_size=1, 
+                                      stride=1,
+                                      bias=False
+                                      )
+            if self.vq_num >= 3:
+                self.get_alpha_3 = nn.Conv2d(in_channels=_pre_out_channel, 
+                                      out_channels=_pre_out_channel,
+                                      kernel_size=1, 
+                                      stride=1,
+                                      bias=False
+                                      )
+            if self.vq_num >= 4:
+                self.get_alpha_4 = nn.Conv2d(in_channels=_pre_out_channel, 
+                                      out_channels=_pre_out_channel,
+                                      kernel_size=1, 
+                                      stride=1,
+                                      bias=False
+                                      )
 
         elif vq == 'lorc_old':    
             from code_backup.quantise import EfficientVectorQuantiser
@@ -208,6 +250,7 @@ class Model(nn.Module):
                                 num_residual_layers, 
                                 num_residual_hiddens,
                                 input_dim,f)
+        print(f"self.use_normed_z = {self.use_normed_z}")
 
     def encode(self, x):
         z_e_x = self._encoder(x)
@@ -218,12 +261,46 @@ class Model(nn.Module):
     def forward(self, x):
         z = self._encoder(x)
         z = self._pre_vq_conv(z)
+        if self.use_normed_z:
+            z = F.normalize(z, dim=1)
+
+        # --- m_scale, n=m
+        # if self.mlp is not None:
+        #     scale_factor = self.mlp(z)
+        #     scale_factor = torch.tanh(scale_factor)
+        #     bs, c, h, w = z.shape            
+        #     z_scaled = z.view(bs, c//self.codebook_embedding_dim, self.codebook_embedding_dim, h, w) * scale_factor.unsqueeze(dim=2)
+        #     z = z_scaled.view(z.shape)  
+
+        # --- m_scale, n=d
         if self.mlp is not None:
             scale_factor = self.mlp(z)
-            scale_factor = torch.tanh(scale_factor)
-            bs, c, h, w = z.shape            
-            z_scaled = z.view(bs, c//self.codebook_embedding_dim, self.codebook_embedding_dim, h, w) * scale_factor.unsqueeze(dim=2)
-            z = z_scaled.view(z.shape)  
+            scale_factor = torch.tanh(scale_factor)           
+            z = z * scale_factor
+        
+        # # --- m_scale, n=m, alpha, 1-alpha
+        # if self.vq_num == 2:
+        #     scale_factor = self.get_alpha(z)
+        #     scale_factor = torch.tanh(scale_factor)   # exp_LooCv3_base_tanh/vqnum2_base     
+        #     # scale_factor = torch.sigmoid(scale_factor)   # exp_LooCv3/vqnum2_base     
+        #     z = [z * scale_factor, z * (1-scale_factor)]
+        #     # TODO  z = [z * scale_factor, z * (1-scale_factor)]
+        
+        if self.vq_num >= 2:
+            z_list = []
+            scale_factor_1 = torch.sigmoid(self.get_alpha_1(z))
+            z_list.append(z * scale_factor_1)
+            scale_factor_2 = torch.sigmoid(self.get_alpha_2(z)) 
+            z_list.append(z * scale_factor_2)
+            
+            if self.vq_num >= 3:
+                scale_factor_3 = torch.sigmoid(self.get_alpha_3(z))
+                z_list.append(z * scale_factor_3)
+            if self.vq_num >= 4:
+                scale_factor_4 = torch.sigmoid(self.get_alpha_4(z))
+                z_list.append(z * scale_factor_4)
+            z = z_list
+
         # quantized, loss, (perplexity, encodings, _, bincount) = self._vq_vae(z)
         quantized, loss, (encoding_indices, bincount) = self._vq_vae(z)
         x_recon = self._decoder(quantized)
