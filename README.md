@@ -100,7 +100,7 @@ The users just need to replace the quansiser in [VQGAN](https://github.com/CompV
 ## License
 This work is licensed under a MIT License.
 
-This software is for educational and academic research purposes only. If you wish to obtain a commercial royalty bearing license to this software, please contact us at cxzheng@robots.ox.ac.uk
+This software is for educational and academic research purposes only. If you wish to obtain a commercial royalty bearing license to this software, please contact us.
 
 ## Citation
 
