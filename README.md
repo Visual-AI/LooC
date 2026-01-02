@@ -13,7 +13,7 @@ The code in this repository is built based on [CVQ](https://github.com/lyndonzhe
 ![teaser](images/Fig-reconstruction.png)
 
 - Generation
-![teaser](images/Fig-generation.jpeg)
+![teaser](images/Fig-generation.png)
 
 
 ## Getting starrted
