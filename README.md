@@ -1,33 +1,36 @@
-# CVQ-VAE
+# LooC
 
-[paper]() | [arXiv](https://arxiv.org/abs/2307.15139) | [Project](https://chuanxiaz.com/cvq/) | [Video]()
+[paper]() | [arXiv]() | [Project](https://visual-ai.github.io/looc/) | 
 
-This repository implements the training, testing and evaluation code for the "Online Clustered Codebook" by [Chuanxia Zheng](https://www.chuanxiaz.com) and [Andrea Vedaldi](https://www.robots.ox.ac.uk/~vedaldi/index.html). Given a high-dimensional images, our **CVQ-VAE** aims to quantise it into a discrete space with limited number of codebook entries. Unlike exisiting works that utilze only few entries, our **CVQ-VAE** can avoid codebook collapse and significantly enhance the usage (100% codebook utilisation) of larger codebooks by enabling optimisation all codevectors.
+This repository implements the training, testing and evaluation code for the "LooC: Effective Low-Dimensional Codebook for Compositional Vector Quantization".
+Vector quantization (VQ) is a prevalent and fundamental technique that discretizes continuous feature vectors by approximating them using a codebook. This paper aims to reconcile the conflict arising from the ever-increasing diversity and complexity of data and models, which demand high-capacity yet more compact VQ methods, by presenting a new approach called **LooC** — a method that leverages an effective low-dimensional codebook for compositional vector quantization.
+
+The code in this repository is built based on [CVQ](https://github.com/lyndonzheng/CVQ-VAE) and [VQGAN](https://github.com/CompVis/taming-transformers). As a plug-and-play module, LOOC can directly replace the VQ module in the original repository for immediate use.
 
 ## Examples
 
-- Reconstruction (Top: original input; Middle: Baseline VQGAN; Bottom: Ours CVQ-VAE)
-![teaser](images/rec.png)
+- Reconstruction
+![teaser](images/Fig-reconstruction.png)
 
-- Generation (Left: LSUN-Bedrooms; Middle: LSUN-Churches; Right: ImageNet)
-![teaser](images/generation.jpeg)
+- Generation
+![teaser](images/Fig-generation.jpeg)
 
 
 ## Getting starrted
 - Clone this repos:
 ```
 git clone link
-cd cvq-vae
+cd looc
 ```
 
 ## Requirements
 The original model is trained and evaluated with Pytorch 1.13.1. We fixed all random seeds. The users should be able to achieve the same performance as the quantitative and qualitative results reported in the paper.
 
-A suitable [conda](https://conda.io/) environment named `cvq-vae` can be created and activated with:
+A suitable [conda](https://conda.io/) environment named `looc` can be created and activated with:
 
 ```
 conda env create -f environment.yaml
-conda activate cvq-vae
+conda activate looc
 ```
 
 ## Model Training
@@ -93,8 +96,6 @@ CUDA_VISIBLE_DEVICES=<GPU_ID> python evaluation.py \
 ## Model Application
 The users just need to replace the quansiser in [VQGAN](https://github.com/CompVis/taming-transformers) for ffhq and imagenet reconstruction and [LDM](https://github.com/CompVis/latent-diffusion) for lsun generation.
 
-## Next
-- codebook learning for 3D reconstruction and generation
 
 ## License
 This work is licensed under a MIT License.
@@ -105,11 +106,13 @@ This software is for educational and academic research purposes only. If you wis
 
 If you use this code for your research, please cite our papers.
 ```
-@InProceedings{Zheng_2023_CVQ,
-    author    = {Zheng, Chuanxia and Vedaldi, Andrea},
-    title     = {Online Clustered Codebook},
-    booktitle = {Proceedings of International Conference on Computer Vision (ICCV)},
-    month     = {October},
-    year      = {2023},
+
+@inproceedings{li26wacv,
+    author    = {Li, Jie and Wong, Kwan-Yee~K. and Han, Kai},
+    title     = {LooC: Effective Low-Dimensional Codebook for Compositional Vector Quantization},
+    booktitle = {Proc. Winter Conference on Applications of Computer Vision},
+    address   = {Tucson, Arizona, USA},
+    month     = {March},
+    year      = {2026}
 }
 ```

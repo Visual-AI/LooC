@@ -1,4 +1,4 @@
-name: vae
+name: looc
 channels:
   - pytorch
   - defaults
