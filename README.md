@@ -1,6 +1,6 @@
 # LooC
 
-[paper]() | [arXiv]() | [Project](https://visual-ai.github.io/looc/) | 
+[Paper](https://arxiv.org/pdf/2601.00222) | [arXiv](https://arxiv.org/abs/2601.00222) | [Project](https://visual-ai.github.io/looc/)
 
 This repository implements the training, testing and evaluation code for the "LooC: Effective Low-Dimensional Codebook for Compositional Vector Quantization".
 Vector quantization (VQ) is a prevalent and fundamental technique that discretizes continuous feature vectors by approximating them using a codebook. This paper aims to reconcile the conflict arising from the ever-increasing diversity and complexity of data and models, which demand high-capacity yet more compact VQ methods, by presenting a new approach called **LooC** — a method that leverages an effective low-dimensional codebook for compositional vector quantization.
@@ -107,12 +107,10 @@ This software is for educational and academic research purposes only. If you wis
 If you use this code for your research, please cite our papers.
 ```
 
-@inproceedings{li26wacv,
+@inproceedings{li26looc,
     author    = {Li, Jie and Wong, Kwan-Yee~K. and Han, Kai},
     title     = {LooC: Effective Low-Dimensional Codebook for Compositional Vector Quantization},
     booktitle = {Proc. Winter Conference on Applications of Computer Vision},
-    address   = {Tucson, Arizona, USA},
-    month     = {March},
     year      = {2026}
 }
 ```
